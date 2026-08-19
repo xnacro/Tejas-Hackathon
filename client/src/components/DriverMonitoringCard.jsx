@@ -12,9 +12,11 @@ import {
   Sliders,
   Sparkles,
   Zap,
+  Clock,
   Activity,
   CheckCircle2,
-  AlertOctagon
+  AlertOctagon,
+  Timer
 } from "lucide-react";
 import { soundSynthesizer } from "../utils/audioAlerts";
 import { 
@@ -38,7 +40,9 @@ export default function DriverMonitoringCard({
   const canvasRef = useRef(null);
   const animationFrameRef = useRef(null);
   const faceMeshRef = useRef(null);
-  const analyzerRef = useRef(new TemporalDrowsinessAnalyzer(8.0, 0.23, 0.60));
+  const analyzerRef = useRef(new TemporalDrowsinessAnalyzer(8.0, 0.23, 0.60, 4.5));
+  const hasTriggeredRestAreaRef = useRef(false);
+  const lastStateUpdateTimeRef = useRef(0);
 
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState(null);
@@ -49,16 +53,24 @@ export default function DriverMonitoringCard({
   const [fps, setFps] = useState(0);
   const [trendHistory, setTrendHistory] = useState([14, 16, 18, 17, 19, 18, 17, 18, 19, 18]);
 
-  // Sensitivity settings
+  // Live indicators for rapid UI responsiveness
+  const [currentClosureSec, setCurrentClosureSec] = useState(0);
+
+  // User Customizable AI Thresholds
+  const [closureThresholdSec, setClosureThresholdSec] = useState(4.5); // Default 4.5 seconds
   const [earThreshold, setEarThreshold] = useState(0.23);
   const [marThreshold, setMarThreshold] = useState(0.60);
 
   // Sync analyzer thresholds
   useEffect(() => {
     if (analyzerRef.current) {
-      analyzerRef.current.setThresholds({ earThreshold, marThreshold });
+      analyzerRef.current.setThresholds({ 
+        earThreshold, 
+        marThreshold, 
+        closureThresholdSec 
+      });
     }
-  }, [earThreshold, marThreshold]);
+  }, [earThreshold, marThreshold, closureThresholdSec]);
 
   // Start webcam
   const startCamera = async () => {
@@ -85,7 +97,7 @@ export default function DriverMonitoringCard({
         };
       }
     } catch (err) {
-      console.warn("Camera permission / access error:", err);
+      console.warn("Camera permission error:", err);
       setCameraError("Camera access required for real-time face tracking. Please allow camera access.");
       setCameraActive(false);
     }
@@ -103,6 +115,7 @@ export default function DriverMonitoringCard({
     }
     setCameraActive(false);
     setFaceDetected(false);
+    setCurrentClosureSec(0);
     if (canvasRef.current) {
       const ctx = canvasRef.current.getContext("2d");
       ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
@@ -119,7 +132,6 @@ export default function DriverMonitoringCard({
         if (!isMounted) return;
         faceMeshRef.current = fm;
         setModelLoading(false);
-        console.log("MediaPipe FaceMesh engine ready.");
       })
       .catch((err) => {
         if (!isMounted) return;
@@ -127,7 +139,6 @@ export default function DriverMonitoringCard({
         setModelLoading(false);
       });
 
-    // Auto-attempt camera start
     startCamera();
 
     return () => {
@@ -136,7 +147,7 @@ export default function DriverMonitoringCard({
     };
   }, []);
 
-  // 2. Real-Time Frame Processing Loop
+  // 2. Real-Time Frame Processing Loop with Throttled State Updates
   useEffect(() => {
     if (!cameraActive) return;
 
@@ -161,13 +172,11 @@ export default function DriverMonitoringCard({
         lastTime = now;
       }
 
-      // Sync canvas dimensions with video
       if (canvas && video.videoWidth > 0 && canvas.width !== video.videoWidth) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
       }
 
-      // Process FaceMesh frame
       if (faceMeshRef.current && !isProcessing) {
         isProcessing = true;
         try {
@@ -178,25 +187,32 @@ export default function DriverMonitoringCard({
               const w = video.videoWidth || 640;
               const h = video.videoHeight || 480;
 
-              // Compute Real Facial Geometry Metrics
+              // 1. Calculate Geometry
               const leftEar = calculateEAR(landmarks, LEFT_EYE, w, h);
               const rightEar = calculateEAR(landmarks, RIGHT_EYE, w, h);
               const avgEar = (leftEar + rightEar) / 2.0;
               const mar = calculateMAR(landmarks, MOUTH, w, h);
               const headPose = estimateHeadPose(landmarks, w, h);
 
-              // Temporal Analyzer (Sliding window Drowsiness & Microsleep detection)
+              // 2. Temporal Analysis
               const analysis = analyzerRef.current.update(leftEar, rightEar, mar, headPose);
+              const closureSec = analysis.metrics?.closureDurationSec || 0;
+              setCurrentClosureSec(closureSec);
 
-              // Update React App State in real time
-              setAiState(analysis);
-
-              // Draw Live Canvas Mesh Overlay
+              // 3. Draw live canvas mesh
               if (canvas) {
                 drawFaceMeshOverlay(canvas, landmarks, analysis);
               }
+
+              // 4. Throttled parent state update (every 120ms or on critical state change) to prevent React depth loops
+              const isSignificant = analysis.state === "CRITICAL" || analysis.state === "DROWSY";
+              if (now - lastStateUpdateTimeRef.current > 120 || isSignificant) {
+                lastStateUpdateTimeRef.current = now;
+                setAiState(analysis);
+              }
             } else {
               setFaceDetected(false);
+              setCurrentClosureSec(0);
               if (canvas) {
                 const ctx = canvas.getContext("2d");
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -224,7 +240,7 @@ export default function DriverMonitoringCard({
     };
   }, [cameraActive, setAiState]);
 
-  // Update audio alerts and trend history when score changes
+  // Audio Alerts & Single-Fire Rest Area Modal trigger
   useEffect(() => {
     soundSynthesizer.setAlertLevel(aiState.alertLevel);
 
@@ -233,10 +249,17 @@ export default function DriverMonitoringCard({
       return next;
     });
 
-    if (aiState.drowsinessScore >= 55 && onTriggerRestArea) {
-      onTriggerRestArea();
+    if (aiState.drowsinessScore >= 60) {
+      if (!hasTriggeredRestAreaRef.current) {
+        hasTriggeredRestAreaRef.current = true;
+        if (onTriggerRestArea) {
+          onTriggerRestArea();
+        }
+      }
+    } else {
+      hasTriggeredRestAreaRef.current = false;
     }
-  }, [aiState.drowsinessScore, aiState.alertLevel, onTriggerRestArea]);
+  }, [aiState.drowsinessScore, aiState.alertLevel]);
 
   const toggleSound = () => {
     const muted = soundSynthesizer.toggleMute();
@@ -278,6 +301,9 @@ export default function DriverMonitoringCard({
     return `${x},${y}`;
   }).join(" ");
 
+  // Progress percentage of eye closure towards critical threshold
+  const closureProgressPct = Math.min(100, Math.round((currentClosureSec / closureThresholdSec) * 100));
+
   return (
     <div className="flex flex-col gap-3.5 h-full">
       {/* Driver Monitoring Card Header */}
@@ -307,11 +333,13 @@ export default function DriverMonitoringCard({
 
           <button
             onClick={() => setShowControls(!showControls)}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors cursor-pointer"
-            title="Adjust AI Thresholds"
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+              showControls ? "bg-blue-100 text-blue-700" : "bg-slate-100 hover:bg-slate-200 text-slate-600"
+            }`}
+            title="Adjust Eye Closure Alarm Duration & Settings"
           >
             <Sliders className="w-3.5 h-3.5" />
-            <span>Settings</span>
+            <span>Settings ({closureThresholdSec}s)</span>
           </button>
         </div>
       </div>
@@ -329,7 +357,7 @@ export default function DriverMonitoringCard({
           }`}
         />
 
-        {/* Real-time Facial Mesh Canvas (ALWAYS Mounted in DOM) */}
+        {/* Real-time Facial Mesh Canvas */}
         <canvas
           ref={canvasRef}
           className={`absolute inset-0 w-full h-full pointer-events-none object-cover -scale-x-100 ${
@@ -337,7 +365,7 @@ export default function DriverMonitoringCard({
           }`}
         />
 
-        {/* Fallback Overlay when Camera is Stopped or Blocked */}
+        {/* Fallback Overlay when Camera is Stopped */}
         {!cameraActive && (
           <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-slate-900/90 backdrop-blur-md">
             <div className="w-14 h-14 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 mb-3 animate-pulse">
@@ -345,35 +373,33 @@ export default function DriverMonitoringCard({
             </div>
             <h3 className="text-sm font-bold text-white mb-1">Real-Time Face Drowsiness AI</h3>
             <p className="text-xs text-slate-400 mb-4 max-w-xs leading-relaxed">
-              {cameraError || "Enable your webcam to start real-time computer vision tracking of eye blinks, yawning, and fatigue."}
+              {cameraError || "Enable webcam for real-time computer vision tracking of eye blinks, fatigue, and yawning."}
             </p>
             <button
               onClick={startCamera}
               className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-extrabold shadow-lg shadow-blue-500/30 transition-all active:scale-95 cursor-pointer flex items-center gap-2"
             >
               <Zap className="w-4 h-4" />
-              <span>Allow & Start Real Camera</span>
+              <span>Allow & Start Camera</span>
             </button>
           </div>
         )}
 
         {/* Top Badges Bar */}
         <div className="absolute top-3.5 right-3.5 z-20 flex items-center gap-2">
-          {/* AI Status Badge */}
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/80 border border-white/20 backdrop-blur-md">
             <span className={`w-2 h-2 rounded-full ${faceDetected ? "bg-emerald-400 animate-ping" : cameraActive ? "bg-amber-400 animate-pulse" : "bg-slate-500"}`}></span>
             <span className="text-[10px] font-bold text-white tracking-wider">
               {modelLoading 
-                ? "LOADING MODEL..." 
+                ? "LOADING AI..." 
                 : !cameraActive 
                 ? "CAMERA OFF" 
                 : faceDetected 
-                ? `FACE TRACKING (${fps} FPS)` 
+                ? `AI ACTIVE (${fps} FPS)` 
                 : "LOOK AT CAMERA"}
             </span>
           </div>
 
-          {/* LIVE Badge */}
           {cameraActive && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-950/80 border border-red-500/30 backdrop-blur-md">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
@@ -381,26 +407,6 @@ export default function DriverMonitoringCard({
             </div>
           )}
         </div>
-
-        {/* Face Bounding Box & Target Brackets */}
-        {cameraActive && (
-          <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-            <div className="relative w-36 h-44 sm:w-44 sm:h-52">
-              <div className={`absolute top-0 left-0 w-6 h-6 border-t-3 border-l-3 rounded-tl-lg transition-colors duration-300 ${
-                isCritical ? "border-red-500" : isDrowsy ? "border-orange-500" : faceDetected ? "border-emerald-400" : "border-slate-600"
-              }`} />
-              <div className={`absolute top-0 right-0 w-6 h-6 border-t-3 border-r-3 rounded-tr-lg transition-colors duration-300 ${
-                isCritical ? "border-red-500" : isDrowsy ? "border-orange-500" : faceDetected ? "border-emerald-400" : "border-slate-600"
-              }`} />
-              <div className={`absolute bottom-0 left-0 w-6 h-6 border-b-3 border-l-3 rounded-bl-lg transition-colors duration-300 ${
-                isCritical ? "border-red-500" : isDrowsy ? "border-orange-500" : faceDetected ? "border-emerald-400" : "border-slate-600"
-              }`} />
-              <div className={`absolute bottom-0 right-0 w-6 h-6 border-b-3 border-r-3 rounded-br-lg transition-colors duration-300 ${
-                isCritical ? "border-red-500" : isDrowsy ? "border-orange-500" : faceDetected ? "border-emerald-400" : "border-slate-600"
-              }`} />
-            </div>
-          </div>
-        )}
 
         {/* Floating Real Drowsiness Score HUD (Top-Left) */}
         <div className="absolute top-3.5 left-3.5 z-20 p-3 rounded-2xl glass-hud min-w-[130px] border border-white/20">
@@ -412,7 +418,6 @@ export default function DriverMonitoringCard({
             {aiState.stateLabel}
           </div>
 
-          {/* Mini Waveform Sparkline */}
           <div className="mt-2 w-full h-7 overflow-hidden">
             <svg className="w-full h-full" viewBox={`0 0 ${svgWidth} ${svgHeight}`}>
               <polyline
@@ -426,6 +431,31 @@ export default function DriverMonitoringCard({
             </svg>
           </div>
         </div>
+
+        {/* Real-Time Eye Closure Countdown / Progress Bar (Shows when eyes are closed) */}
+        {cameraActive && currentClosureSec > 0.4 && (
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-2 p-3.5 rounded-2xl bg-slate-950/90 border border-red-500/50 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-2 text-white font-extrabold text-xs">
+              <Timer className="w-4 h-4 text-red-400 animate-spin" />
+              <span>Eyes Closed: <strong className="text-red-400 text-sm">{currentClosureSec.toFixed(1)}s</strong> / {closureThresholdSec}s</span>
+            </div>
+            <div className="w-48 h-2.5 rounded-full bg-slate-800 overflow-hidden border border-white/20">
+              <div 
+                className={`h-full transition-all duration-100 ${
+                  currentClosureSec >= closureThresholdSec 
+                    ? "bg-red-500 animate-pulse" 
+                    : currentClosureSec >= closureThresholdSec * 0.6 
+                    ? "bg-orange-500" 
+                    : "bg-amber-400"
+                }`}
+                style={{ width: `${closureProgressPct}%` }}
+              />
+            </div>
+            <span className="text-[10px] text-slate-300 font-medium">
+              {currentClosureSec >= closureThresholdSec ? "🚨 CRITICAL MICROSLEEP ALARM!" : "Microsleep countdown..."}
+            </span>
+          </div>
+        )}
 
         {/* Bottom Real Sensor Bar Overlay inside Camera */}
         <div className="absolute bottom-3 inset-x-3 z-20 flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-950/85 border border-white/15 backdrop-blur-md text-[11px] font-medium text-white/90">
@@ -474,7 +504,7 @@ export default function DriverMonitoringCard({
         <button
           onClick={toggleSound}
           className="p-1.5 rounded-lg hover:bg-black/5 text-slate-700 transition-colors cursor-pointer"
-          title={isMuted ? "Unmute Audio Siren" : "Mute Audio Siren"}
+          title={isMuted ? "Unmute Siren" : "Mute Siren"}
         >
           {isMuted ? <VolumeX className="w-4 h-4 text-slate-400" /> : <Volume2 className="w-4 h-4" />}
         </button>
@@ -482,20 +512,74 @@ export default function DriverMonitoringCard({
 
       {/* AI Sensitivity & Threshold Settings Drawer */}
       {showControls && (
-        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-lg space-y-3 animate-in fade-in slide-in-from-top-2">
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-lg space-y-3.5 animate-in fade-in slide-in-from-top-2">
           <div className="flex items-center justify-between text-xs font-bold text-slate-800">
             <span className="flex items-center gap-1.5">
-              <Sliders className="w-3.5 h-3.5 text-blue-600" /> AI Detection Sensitivity
+              <Sliders className="w-3.5 h-3.5 text-blue-600" /> Driver Drowsiness Custom Settings
             </span>
             <span className="text-xs font-mono font-bold text-slate-500">
-              Blinks: {aiState.metrics?.totalBlinks || 0}
+              Total Blinks: {aiState.metrics?.totalBlinks || 0}
             </span>
           </div>
 
-          <div className="space-y-2 text-[11px]">
+          {/* 1. EYE CLOSURE DURATION THRESHOLD (The User's Desired Setting) */}
+          <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-2">
+            <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-blue-600" />
+                Eye Closure Alarm Delay:
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-blue-600 text-white font-mono text-xs font-extrabold">
+                {closureThresholdSec} seconds
+              </span>
+            </div>
+
+            <input
+              type="range"
+              min="2.0"
+              max="8.0"
+              step="0.5"
+              value={closureThresholdSec}
+              onChange={(e) => setClosureThresholdSec(Number(e.target.value))}
+              className="w-full accent-blue-600 cursor-pointer"
+            />
+
+            <div className="flex items-center justify-between gap-1.5 pt-1">
+              <button
+                onClick={() => setClosureThresholdSec(3.0)}
+                className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                  closureThresholdSec === 3.0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                3.0s (Fast)
+              </button>
+              <button
+                onClick={() => setClosureThresholdSec(4.5)}
+                className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                  closureThresholdSec === 4.5 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                4.5s (Default)
+              </button>
+              <button
+                onClick={() => setClosureThresholdSec(6.0)}
+                className={`flex-1 py-1 rounded-lg text-[10px] font-bold border transition-colors cursor-pointer ${
+                  closureThresholdSec === 6.0 ? "bg-blue-600 text-white border-blue-600" : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                6.0s (Relaxed)
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-500 leading-tight">
+              Alarm triggers only when your eyes stay closed continuously for at least <strong>{closureThresholdSec} seconds</strong>.
+            </p>
+          </div>
+
+          {/* 2. SENSITIVITY THRESHOLDS */}
+          <div className="space-y-2.5 text-[11px] pt-1">
             <div className="flex items-center justify-between text-slate-600 font-medium">
-              <span>Eye Closure (EAR) Threshold:</span>
-              <strong className="text-blue-600 font-mono text-xs">{earThreshold} (Current: {aiState.metrics?.avgEar || 0})</strong>
+              <span>Eye Openness (EAR) Sensitivity:</span>
+              <strong className="text-slate-800 font-mono text-xs">{earThreshold} (Live EAR: {aiState.metrics?.avgEar || 0})</strong>
             </div>
             <input
               type="range"
@@ -506,15 +590,10 @@ export default function DriverMonitoringCard({
               onChange={(e) => setEarThreshold(Number(e.target.value))}
               className="w-full accent-blue-600 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-slate-400">
-              <span>Tighter (0.16)</span>
-              <span>Default (0.23)</span>
-              <span>Sensitive (0.30)</span>
-            </div>
 
-            <div className="flex items-center justify-between text-slate-600 font-medium pt-2 border-t border-slate-100">
+            <div className="flex items-center justify-between text-slate-600 font-medium pt-1.5 border-t border-slate-100">
               <span>Yawn Detection (MAR) Threshold:</span>
-              <strong className="text-amber-600 font-mono text-xs">{marThreshold} (Current: {aiState.metrics?.mar || 0})</strong>
+              <strong className="text-slate-800 font-mono text-xs">{marThreshold} (Live MAR: {aiState.metrics?.mar || 0})</strong>
             </div>
             <input
               type="range"
@@ -525,11 +604,6 @@ export default function DriverMonitoringCard({
               onChange={(e) => setMarThreshold(Number(e.target.value))}
               className="w-full accent-amber-600 cursor-pointer"
             />
-            <div className="flex justify-between text-[10px] text-slate-400">
-              <span>Sensitive (0.45)</span>
-              <span>Default (0.60)</span>
-              <span>Wide (0.80)</span>
-            </div>
           </div>
         </div>
       )}

@@ -113,10 +113,11 @@ export function estimateHeadPose(landmarks, imgW = 640, imgH = 480) {
  * Rolling Window Temporal Analyzer for Drowsiness Detection
  */
 export class TemporalDrowsinessAnalyzer {
-  constructor(windowSeconds = 8.0, earThreshold = 0.23, marThreshold = 0.60) {
+  constructor(windowSeconds = 8.0, earThreshold = 0.23, marThreshold = 0.60, closureThresholdSec = 4.5) {
     this.windowSeconds = windowSeconds;
     this.earThreshold = earThreshold;
     this.marThreshold = marThreshold;
+    this.closureThresholdSec = closureThresholdSec; // default 4.5 seconds
 
     this.history = [];
     this.eyeClosedStartTime = null;
@@ -126,10 +127,11 @@ export class TemporalDrowsinessAnalyzer {
     this.lastBlinkTime = 0;
   }
 
-  setThresholds({ earThreshold, marThreshold, windowSeconds }) {
+  setThresholds({ earThreshold, marThreshold, windowSeconds, closureThresholdSec }) {
     if (earThreshold !== undefined && !isNaN(earThreshold)) this.earThreshold = Number(earThreshold);
     if (marThreshold !== undefined && !isNaN(marThreshold)) this.marThreshold = Number(marThreshold);
     if (windowSeconds !== undefined && !isNaN(windowSeconds)) this.windowSeconds = Number(windowSeconds);
+    if (closureThresholdSec !== undefined && !isNaN(closureThresholdSec)) this.closureThresholdSec = Number(closureThresholdSec);
   }
 
   update(leftEar, rightEar, mar, headPose) {
@@ -150,8 +152,8 @@ export class TemporalDrowsinessAnalyzer {
     } else {
       if (this.eyeClosedStartTime !== null) {
         const closedTime = now - this.eyeClosedStartTime;
-        // Count normal blinks (between 0.08s and 0.45s)
-        if (closedTime >= 0.08 && closedTime <= 0.45) {
+        // Count normal blinks (between 0.08s and 0.50s)
+        if (closedTime >= 0.08 && closedTime <= 0.50) {
           this.totalBlinks += 1;
           this.lastBlinkTime = now;
         }
@@ -167,7 +169,7 @@ export class TemporalDrowsinessAnalyzer {
         this.yawnStartTime = now;
       }
       yawnDuration = now - this.yawnStartTime;
-      if (yawnDuration > 1.2) {
+      if (yawnDuration > 1.3) {
         if (
           this.recentYawns.length === 0 ||
           now - this.recentYawns[this.recentYawns.length - 1] > 3.5
@@ -211,17 +213,18 @@ export class TemporalDrowsinessAnalyzer {
     // 5. Score computation
     let score = 0.0;
 
-    // Baseline alert score
-    score += Math.min(45.0, perclos * 1.5);
+    // Baseline PERCLOS factor (up to 30 pts)
+    score += Math.min(30.0, perclos * 1.0);
 
-    // Instant continuous prolonged closure (Microsleep alert!)
-    if (closureDuration > 0.8) {
-      score += Math.min(55.0, (closureDuration - 0.8) * 45.0);
+    // Smooth continuous closure progression towards configured closureThresholdSec (e.g. 4.5s)
+    if (closureDuration > 1.0) {
+      const progress = (closureDuration - 1.0) / Math.max(1.0, this.closureThresholdSec - 1.0);
+      score += Math.min(70.0, progress * 70.0);
     }
 
     // Yawning factor
     if (yawnsInWindow >= 1) {
-      score += Math.min(25.0, yawnsInWindow * 12.5);
+      score += Math.min(25.0, yawnsInWindow * 12.0);
     }
 
     // Head posture factor
@@ -233,26 +236,26 @@ export class TemporalDrowsinessAnalyzer {
     // Bound 0 - 100
     score = Math.max(0.0, Math.min(100.0, score));
 
-    // 6. Assign Multi-level State
+    // 6. Assign Multi-level State based on closureThresholdSec
     let state = "ALERT";
     let stateLabel = "Alert";
     let statusMessage = "You are Alert. Keep driving safely!";
     let alertLevel = 0;
 
-    if (score >= 75.0 || closureDuration >= 1.6) {
+    if (closureDuration >= this.closureThresholdSec || score >= 80.0) {
       state = "CRITICAL";
       stateLabel = "CRITICAL DROWSINESS";
-      statusMessage = "CRITICAL DROWSINESS! Microsleep detected! Stop driving safely immediately.";
+      statusMessage = `CRITICAL DROWSINESS! Eyes closed for ${closureDuration.toFixed(1)}s! Stop driving immediately.`;
       alertLevel = 3;
-    } else if (score >= 55.0 || closureDuration >= 1.0) {
+    } else if (closureDuration >= this.closureThresholdSec * 0.65 || score >= 55.0) {
       state = "DROWSY";
       stateLabel = "DROWSY";
-      statusMessage = "Drowsiness detected. Please consider taking a rest break.";
+      statusMessage = `Drowsiness detected (Eyes closed ${closureDuration.toFixed(1)}s). Please consider taking a rest.`;
       alertLevel = 2;
-    } else if (score >= 28.0 || isYawning || isHeadDown) {
+    } else if (closureDuration >= 1.5 || score >= 28.0 || isYawning || isHeadDown) {
       state = "CAUTION";
       stateLabel = "CAUTION";
-      statusMessage = isYawning ? "Yawning detected. Stay alert." : "Signs of fatigue detected. Please stay focused.";
+      statusMessage = isYawning ? "Yawning detected. Stay alert." : "Signs of fatigue detected. Keep eyes on the road.";
       alertLevel = 1;
     }
 
@@ -274,6 +277,7 @@ export class TemporalDrowsinessAnalyzer {
         mar: Math.round(mar * 1000) / 1000,
         perclos: Math.round(perclos * 10) / 10,
         closureDurationSec: Math.round(closureDuration * 10) / 10,
+        closureThresholdSec: this.closureThresholdSec,
         yawnsRecent: yawnsInWindow,
         totalBlinks: this.totalBlinks,
         headPitch: headPose.pitch,
@@ -315,7 +319,6 @@ export async function initializeFaceMesh() {
 
   // 2. Dynamically load script
   return new Promise((resolve, reject) => {
-    // Check if script tag already exists
     const existing = document.querySelector('script[src*="face_mesh.js"]');
     if (existing && window.FaceMesh) {
       return resolve(createModel(window.FaceMesh));
@@ -373,7 +376,7 @@ export function drawFaceMeshOverlay(canvas, landmarks, stateInfo) {
     ? "rgba(245, 158, 11, 0.3)" 
     : "rgba(16, 185, 129, 0.25)";
 
-  // 1. Draw Subtle Face Oval contour
+  // 1. Face Oval
   ctx.beginPath();
   FACE_OVAL.forEach((idx, i) => {
     const pt = landmarks[idx];
@@ -387,7 +390,7 @@ export function drawFaceMeshOverlay(canvas, landmarks, stateInfo) {
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
-  // 2. Helper for contours
+  // 2. Contours helper
   const drawContour = (indices, color, strokeW = 2.2, close = true) => {
     ctx.beginPath();
     indices.forEach((idx, i) => {
@@ -403,13 +406,13 @@ export function drawFaceMeshOverlay(canvas, landmarks, stateInfo) {
     ctx.stroke();
   };
 
-  // 3. Draw Left & Right Eye Contours
+  // 3. Eyes Contours
   const isEyeClosed = stateInfo?.indicators?.eyes === "Closed";
   const eyeColor = isEyeClosed ? "#ef4444" : "#38bdf8";
-  drawContour(LEFT_EYE, eyeColor, isEyeClosed ? 3.0 : 2.0, true);
-  drawContour(RIGHT_EYE, eyeColor, isEyeClosed ? 3.0 : 2.0, true);
+  drawContour(LEFT_EYE, eyeColor, isEyeClosed ? 3.2 : 2.0, true);
+  drawContour(RIGHT_EYE, eyeColor, isEyeClosed ? 3.2 : 2.0, true);
 
-  // 4. Draw Iris Centers (if present)
+  // 4. Iris tracking
   if (landmarks.length >= 478) {
     const drawPoint = (idx, color, radius = 3) => {
       const pt = landmarks[idx];
@@ -424,12 +427,12 @@ export function drawFaceMeshOverlay(canvas, landmarks, stateInfo) {
     drawPoint(473, isEyeClosed ? "#ef4444" : "#0284c7", 3.5);
   }
 
-  // 5. Draw Lips Contour
+  // 5. Mouth Contour
   const isYawning = stateInfo?.indicators?.yawning === "Yes";
   const mouthColor = isYawning ? "#f97316" : "rgba(255, 255, 255, 0.7)";
   drawContour(MOUTH, mouthColor, isYawning ? 3.0 : 1.8, true);
 
-  // 6. Draw Key Landmark Tracking Dots
+  // 6. Landmark Crosshair points
   [1, 199, 33, 263, 61, 291].forEach(idx => {
     const pt = landmarks[idx];
     const x = pt.x * w;

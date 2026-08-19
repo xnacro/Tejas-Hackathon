@@ -4,31 +4,39 @@ from collections import deque
 class TemporalDrowsinessAnalyzer:
     """
     Analyzes temporal behavioral patterns across a rolling time window:
-    - Distinguishes natural rapid blinks (100-300ms) from microsleeps / prolonged closures (>1.2s).
+    - Distinguishes natural rapid blinks (100-300ms) from microsleeps / prolonged closures.
+    - Configurable eye closure duration threshold (default: 4.5 seconds).
     - Detects sustained and repeated yawning (>0.6 MAR sustained for >1.5s).
     - Detects head nodding/dropping pattern.
     - Calculates normalized Drowsiness Score (0-100) and multi-level warning state.
     """
-    def __init__(self, window_seconds=10.0, ear_threshold=0.22, mar_threshold=0.65):
+    def __init__(self, window_seconds=10.0, ear_threshold=0.23, mar_threshold=0.60, closure_threshold_sec=4.5):
         self.window_seconds = window_seconds
         self.ear_threshold = ear_threshold
         self.mar_threshold = mar_threshold
+        self.closure_threshold_sec = closure_threshold_sec
 
         # Sliding window history of (timestamp, ear, mar, is_eye_closed, is_yawning, head_pose_down)
         self.history = deque()
         
         # Eye closure tracking
         self.eye_closed_start_time = None
-        self.max_continuous_closure = 0.0
+        self.total_blinks = 0
+        self.last_blink_time = 0
 
         # Yawn tracking
         self.yawn_start_time = None
-        self.yawn_count = 0
         self.recent_yawns = deque()
 
-        # Alert level debounce
-        self.last_alert_level = "ALERT"
-        self.alert_start_time = None
+    def set_thresholds(self, ear_threshold=None, mar_threshold=None, window_seconds=None, closure_threshold_sec=None):
+        if ear_threshold is not None:
+            self.ear_threshold = float(ear_threshold)
+        if mar_threshold is not None:
+            self.mar_threshold = float(mar_threshold)
+        if window_seconds is not None:
+            self.window_seconds = float(window_seconds)
+        if closure_threshold_sec is not None:
+            self.closure_threshold_sec = float(closure_threshold_sec)
 
     def update(self, left_ear, right_ear, mar, head_pose):
         now = time.time()
@@ -45,6 +53,11 @@ class TemporalDrowsinessAnalyzer:
                 self.eye_closed_start_time = now
             closure_duration = now - self.eye_closed_start_time
         else:
+            if self.eye_closed_start_time is not None:
+                closed_time = now - self.eye_closed_start_time
+                if 0.08 <= closed_time <= 0.50:
+                    self.total_blinks += 1
+                    self.last_blink_time = now
             closure_duration = 0.0
             self.eye_closed_start_time = None
 
@@ -53,8 +66,8 @@ class TemporalDrowsinessAnalyzer:
             if self.yawn_start_time is None:
                 self.yawn_start_time = now
             yawn_duration = now - self.yawn_start_time
-            # If yawn lasts more than 1.5 seconds, record as confirmed yawn
-            if yawn_duration > 1.5 and (not self.recent_yawns or now - self.recent_yawns[-1] > 4.0):
+            # If yawn lasts more than 1.4 seconds, record as confirmed yawn
+            if yawn_duration > 1.4 and (not self.recent_yawns or now - self.recent_yawns[-1] > 3.5):
                 self.recent_yawns.append(now)
         else:
             self.yawn_start_time = None
@@ -84,19 +97,15 @@ class TemporalDrowsinessAnalyzer:
         yawns_in_window = len(self.recent_yawns)
 
         # 3. Calculate Normalized Drowsiness Score (0 - 100)
-        # Score components:
-        # - Eye closure / PERCLOS contributes up to 45 pts
-        # - Continuous eye closure (> 1.2s) adds immediate 35-50 pts
-        # - Yawning frequency contributes up to 25 pts
-        # - Head nodding/dropping contributes up to 25 pts
         score = 0.0
 
-        # PERCLOS factor
-        score += min(45.0, perclos * 1.5)
+        # Baseline PERCLOS factor (up to 35 pts)
+        score += min(35.0, perclos * 1.2)
 
-        # Instant prolonged closure (microsleep danger)
-        if closure_duration > 1.2:
-            score += min(45.0, (closure_duration - 1.2) * 35.0)
+        # Closure progress towards configured closure_threshold_sec (e.g. 4.5s)
+        if closure_duration > 1.0:
+            progress = (closure_duration - 1.0) / max(1.0, self.closure_threshold_sec - 1.0)
+            score += min(65.0, progress * 65.0)
 
         # Yawning factor
         if yawns_in_window >= 1:
@@ -111,20 +120,20 @@ class TemporalDrowsinessAnalyzer:
         score = float(max(0.0, min(100.0, score)))
 
         # 4. Multi-level State Assignment
-        if score >= 80.0 or closure_duration >= 2.0:
+        if closure_duration >= self.closure_threshold_sec or score >= 80.0:
             state = "CRITICAL"
             state_label = "CRITICAL DROWSINESS"
-            status_message = "CRITICAL DROWSINESS! Please stop driving safely immediately."
+            status_message = f"CRITICAL DROWSINESS! Eyes closed for {closure_duration:.1f}s! Stop driving immediately."
             alert_level = 3
-        elif score >= 60.0:
+        elif closure_duration >= (self.closure_threshold_sec * 0.65) or score >= 55.0:
             state = "DROWSY"
             state_label = "DROWSY"
-            status_message = "Drowsiness detected. Please consider taking a break."
+            status_message = f"Drowsiness detected (Eyes closed {closure_duration:.1f}s). Please take a break."
             alert_level = 2
-        elif score >= 30.0:
+        elif closure_duration >= 1.5 or score >= 28.0 or is_yawning or is_head_down:
             state = "CAUTION"
             state_label = "CAUTION"
-            status_message = "You appear tired. Please stay alert."
+            status_message = "Yawning detected. Stay alert." if is_yawning else "Signs of fatigue detected. Please stay focused."
             alert_level = 1
         else:
             state = "ALERT"
@@ -145,10 +154,14 @@ class TemporalDrowsinessAnalyzer:
             },
             "metrics": {
                 "avgEar": round(avg_ear, 3),
+                "leftEar": round(left_ear, 3),
+                "rightEar": round(right_ear, 3),
                 "mar": round(mar, 3),
                 "perclos": round(perclos, 1),
                 "closureDurationSec": round(closure_duration, 2),
+                "closureThresholdSec": self.closure_threshold_sec,
                 "yawnsRecent": yawns_in_window,
+                "totalBlinks": self.total_blinks,
                 "headPitch": head_pose.get("pitch", 0),
                 "headYaw": head_pose.get("yaw", 0)
             },
