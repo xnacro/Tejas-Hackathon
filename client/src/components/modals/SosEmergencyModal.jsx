@@ -8,23 +8,34 @@ import {
   Send, 
   CheckCircle2, 
   Volume2, 
-  VolumeX,
-  MapPin
+  VolumeX, 
+  MapPin 
 } from "lucide-react";
 import { soundSynthesizer } from "../../utils/audioAlerts";
+import { useLocation } from "../../context/LocationContext";
 
 export default function SosEmergencyModal({ isOpen, onClose, sosInfo }) {
   const [isDispatched, setIsDispatched] = useState(false);
   const [sirenActive, setSirenActive] = useState(false);
+  const { coords, currentRoad, formattedAddress } = useLocation();
 
   if (!isOpen) return null;
+
+  const activeLat = coords.latitude || 28.5355;
+  const activeLng = coords.longitude || 77.3910;
+  const activeAccuracy = coords.accuracy || 12;
 
   const handleDispatch = async () => {
     try {
       await fetch("/api/sos/trigger", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ location: sosInfo?.currentRoad })
+        body: JSON.stringify({ 
+          location: currentRoad || sosInfo?.currentRoad,
+          latitude: activeLat,
+          longitude: activeLng,
+          accuracy: activeAccuracy
+        })
       });
       setIsDispatched(true);
       soundSynthesizer.playCriticalSiren();
@@ -77,10 +88,13 @@ export default function SosEmergencyModal({ isOpen, onClose, sosInfo }) {
             <MapPin className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
             <div>
               <div className="text-xs font-bold text-slate-800">Current GPS Coordinates & Road</div>
-              <div className="text-xs text-slate-600 font-medium">{sosInfo?.currentRoad || "NH 44, Milestone 234, Noida-Agra Corridor"}</div>
-              <div className="text-[11px] text-slate-400">Lat: 28.5355° N, Lng: 77.3910° E (Accurate to 3m)</div>
+              <div className="text-xs text-slate-700 font-medium">{formattedAddress || currentRoad || "NH 44 Expressway Corridor"}</div>
+              <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                Lat: {activeLat.toFixed(5)}°, Lng: {activeLng.toFixed(5)}° (Accurate to ±{activeAccuracy}m)
+              </div>
             </div>
           </div>
+
 
           {/* Emergency Contacts / Services Grid */}
           <div className="grid grid-cols-2 gap-3">

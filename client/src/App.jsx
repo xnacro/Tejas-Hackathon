@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import io from "socket.io-client";
 
+import { LocationProvider } from "./context/LocationContext";
 import Header from "./components/Header";
 import CenterNav from "./components/CenterNav";
 import DriverMonitoringCard from "./components/DriverMonitoringCard";
@@ -19,7 +20,7 @@ import ShareLocationModal from "./components/modals/ShareLocationModal";
 import RestAreaModal from "./components/modals/RestAreaModal";
 import NotificationsModal from "./components/modals/NotificationsModal";
 
-export default function App() {
+function DashboardContent() {
   const [activeTab, setActiveTab] = useState("dashboard");
 
   // Driver & Vehicle State
@@ -128,7 +129,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen w-full flex flex-col justify-between p-3 sm:p-5 max-w-[1600px] mx-auto select-none">
-      {/* 1. Header (Matching Reference Design) */}
+      {/* 1. Header */}
       <Header
         profile={profile}
         onOpenNotifications={() => setIsNotificationsOpen(true)}
@@ -180,7 +181,7 @@ export default function App() {
           <NearbyServicesCard
             services={services}
             onSelectService={(srv) => {
-              alert(`Navigating to ${srv.name || srv.type} (${srv.distance || srv.distanceKm + " km"})`);
+              // Service clicked -> active destination set in LocationContext
             }}
             onViewAll={() => setIsRulesOpen(true)}
           />
@@ -223,7 +224,7 @@ export default function App() {
         isOpen={isRestAreaOpen}
         onClose={() => setIsRestAreaOpen(false)}
         onNavigate={() => {
-          alert("Route recalculated! Navigating to Highway Oasis Rest Area (2.1 km ahead).");
+          // Handled inside modal via LocationContext
         }}
       />
 
@@ -235,3 +236,12 @@ export default function App() {
     </div>
   );
 }
+
+export default function App() {
+  return (
+    <LocationProvider>
+      <DashboardContent />
+    </LocationProvider>
+  );
+}
+

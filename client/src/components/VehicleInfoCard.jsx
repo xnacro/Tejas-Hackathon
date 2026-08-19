@@ -1,9 +1,17 @@
 import React from "react";
 import { Gauge, Fuel, Thermometer, Route, Car } from "lucide-react";
+import { useLocation } from "../context/LocationContext";
 
 export default function VehicleInfoCard({ telemetry }) {
+  const { coords } = useLocation();
+
+  // Use GPS speed if available (m/s * 3.6 -> km/h), otherwise fallback to vehicle telemetry
+  const displaySpeed = coords.speedKmh !== null && coords.speedKmh !== undefined
+    ? coords.speedKmh
+    : (telemetry?.speed !== undefined ? telemetry.speed : 52);
+
   const items = [
-    { label: "Speed", value: `${telemetry?.speed || 52} km/h`, icon: Gauge, color: "text-blue-600" },
+    { label: "Speed", value: `${displaySpeed} km/h`, icon: Gauge, color: "text-blue-600" },
     { label: "Fuel Level", value: `${telemetry?.fuelLevel || 62}%`, icon: Fuel, color: "text-amber-500" },
     { label: "Engine Temp", value: `${telemetry?.engineTemp || 87}°C`, icon: Thermometer, color: "text-rose-500" },
     { label: "Trip Distance", value: `${telemetry?.tripDistance || 234.8} km`, icon: Route, color: "text-indigo-500" },
@@ -35,3 +43,4 @@ export default function VehicleInfoCard({ telemetry }) {
     </div>
   );
 }
+

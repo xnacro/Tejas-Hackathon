@@ -7,12 +7,18 @@ import {
   TrendingUp, 
   ExternalLink 
 } from "lucide-react";
+import { useLocation } from "../context/LocationContext";
 
 export default function TrafficSafetyCard({ telemetry, onReduceSpeed, onOpenRules }) {
-  const currentSpeed = telemetry?.speed || 68;
+  const { coords, currentRoad } = useLocation();
+
+  const currentSpeed = coords.speedKmh !== null && coords.speedKmh !== undefined 
+    ? coords.speedKmh 
+    : (telemetry?.speed || 68);
   const speedLimit = telemetry?.speedLimit || 60;
   const isOverSpeed = currentSpeed > speedLimit;
   const diff = currentSpeed - speedLimit;
+
 
   return (
     <div className="flex flex-col gap-3">
@@ -85,8 +91,9 @@ export default function TrafficSafetyCard({ telemetry, onReduceSpeed, onOpenRule
           </div>
           <div>
             <div className="text-xs font-bold text-slate-800">Road Condition</div>
-            <div className="text-[11px] text-slate-500">Moderate traffic on NH 44 • Drive Safe</div>
+            <div className="text-[11px] text-slate-500">Moderate traffic on {currentRoad || "NH 44"} • Drive Safe</div>
           </div>
+
         </div>
 
         <div className="flex items-center gap-1.5">

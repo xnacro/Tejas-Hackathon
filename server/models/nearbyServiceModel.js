@@ -61,17 +61,47 @@ let services = [
   }
 ];
 
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371; // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Number((R * c).toFixed(1));
+}
+
 export const NearbyServiceModel = {
-  findAll: (category) => {
+  findAll: (category, userLat, userLng) => {
+    let list = [...services];
     if (category) {
-      return services.filter(s => s.category.toLowerCase() === category.toLowerCase());
+      list = list.filter(s => s.category.toLowerCase() === category.toLowerCase());
     }
-    return services;
+
+    if (userLat !== undefined && userLng !== undefined && !isNaN(userLat) && !isNaN(userLng)) {
+      list = list.map(s => {
+        const dist = haversine(Number(userLat), Number(userLng), s.coordinates.lat, s.coordinates.lng);
+        return {
+          ...s,
+          distanceKm: dist,
+          distance: `${dist} km`
+        };
+      });
+      list.sort((a, b) => a.distanceKm - b.distanceKm);
+    }
+
+    return list;
   },
   findById: (id) => {
     return services.find(s => s.id === id) || null;
   },
-  findNearestRestArea: () => {
-    return services.find(s => s.category === "rest") || services[0];
+  findNearestRestArea: (userLat, userLng) => {
+    const restAreas = NearbyServiceModel.findAll("rest", userLat, userLng);
+    return restAreas.length > 0 ? restAreas[0] : services[2];
   }
 };
+

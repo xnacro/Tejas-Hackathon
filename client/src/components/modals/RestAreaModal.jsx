@@ -1,8 +1,22 @@
 import React from "react";
 import { X, Bed, Navigation, Coffee, ShieldCheck, ShowerHead, ArrowRight } from "lucide-react";
+import { useLocation } from "../../context/LocationContext";
 
 export default function RestAreaModal({ isOpen, onClose, onNavigate }) {
+  const { selectDestination } = useLocation();
+
   if (!isOpen) return null;
+
+  const handleReroute = () => {
+    selectDestination({
+      name: "Highway Oasis Driver Rest Complex",
+      address: "NH 44, Mile 238 Highway Rest Hub",
+      lat: 28.5600,
+      lng: 77.4100
+    });
+    if (onNavigate) onNavigate();
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in">
@@ -55,10 +69,7 @@ export default function RestAreaModal({ isOpen, onClose, onNavigate }) {
 
           {/* Navigate Action */}
           <button
-            onClick={() => {
-              if (onNavigate) onNavigate();
-              onClose();
-            }}
+            onClick={handleReroute}
             className="w-full py-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-extrabold shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition-all active:scale-98 cursor-pointer"
           >
             <Navigation className="w-4 h-4" />
@@ -70,3 +81,4 @@ export default function RestAreaModal({ isOpen, onClose, onNavigate }) {
     </div>
   );
 }
+
