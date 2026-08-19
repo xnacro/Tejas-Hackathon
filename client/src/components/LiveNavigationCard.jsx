@@ -54,7 +54,6 @@ export default function LiveNavigationCard({ onEndTrip }) {
     routeInfo, 
     viewMode, 
     setViewMode,
-    is3DSupported,
     setIs3DSupported
   } = useNavigation();
 
@@ -64,11 +63,12 @@ export default function LiveNavigationCard({ onEndTrip }) {
   const [placesSuggestions, setPlacesSuggestions] = useState(POPULAR_DESTINATIONS);
   const [showDebug, setShowDebug] = useState(false);
   const [mapType, setMapType] = useState("roadmap"); // 'roadmap' | 'hybrid'
+  const [is3DNativeActive, setIs3DNativeActive] = useState(false);
 
   const map2DContainerRef = useRef(null);
   const map3DContainerRef = useRef(null);
   
-  // Google 2D Map Refs
+  // Google Map Refs
   const map2DInstanceRef = useRef(null);
   const driver2DMarkerRef = useRef(null);
   const accuracy2DCircleRef = useRef(null);
@@ -76,11 +76,10 @@ export default function LiveNavigationCard({ onEndTrip }) {
   const directions2DRendererRef = useRef(null);
   const routePolyline2DRef = useRef(null);
 
-  // Google 3D Map Refs
+  // Google 3D Element Refs
   const map3DInstanceRef = useRef(null);
   const driver3DMarkerRef = useRef(null);
   const dest3DMarkerRef = useRef(null);
-  const routePolyline3DRef = useRef(null);
 
   // Autocomplete service ref
   const autocompleteServiceRef = useRef(null);
@@ -108,7 +107,7 @@ export default function LiveNavigationCard({ onEndTrip }) {
     return () => { mounted = false; };
   }, []);
 
-  // Handle predictive places search debounced
+  // Handle predictive places search
   useEffect(() => {
     if (!searchQuery || searchQuery.trim() === "") {
       setPlacesSuggestions(POPULAR_DESTINATIONS);
@@ -173,17 +172,13 @@ export default function LiveNavigationCard({ onEndTrip }) {
   };
 
   // ----------------------------------------------------
-  // 2. Initialize 2D Google Map
+  // 2. Initialize Main Google Map (with 3D Vector & 2D support)
   // ----------------------------------------------------
   useEffect(() => {
-    if (viewMode !== "2D") return;
     let isMounted = true;
 
-    Promise.all([
-      loadGoogleLibrary("maps"),
-      loadGoogleLibrary("marker").catch(() => null)
-    ])
-      .then(([mapsLib]) => {
+    loadGoogleLibrary("maps")
+      .then((mapsLib) => {
         if (!isMounted || !map2DContainerRef.current) return;
 
         const initialPos = { lat: latitude || 28.5355, lng: longitude || 77.3910 };
@@ -191,7 +186,9 @@ export default function LiveNavigationCard({ onEndTrip }) {
         if (!map2DInstanceRef.current) {
           const map = new mapsLib.Map(map2DContainerRef.current, {
             center: initialPos,
-            zoom: 15.5,
+            zoom: viewMode === "3D" ? 17.5 : 15.5,
+            tilt: viewMode === "3D" ? 60 : 0,
+            heading: viewMode === "3D" ? (heading || 45) : 0,
             disableDefaultUI: true,
             zoomControl: false,
             mapTypeControl: false,
@@ -220,19 +217,20 @@ export default function LiveNavigationCard({ onEndTrip }) {
           });
           accuracy2DCircleRef.current = circle;
 
-          // Driver Marker (Surakha Blue Pulse Icon)
+          // Driver Marker (Surakha Blue Pulse Icon with Vehicle Pointer)
           const driverMarker = new window.google.maps.Marker({
             position: initialPos,
             map,
-            title: "Driver Current Location",
+            title: "Driver Location",
             zIndex: 999,
             icon: {
-              path: window.google.maps.SymbolPath.CIRCLE,
-              scale: 9,
+              path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+              scale: 6,
               fillColor: "#2563eb",
               fillOpacity: 1,
               strokeColor: "#ffffff",
-              strokeWeight: 3.5
+              strokeWeight: 2,
+              rotation: heading || 0
             }
           });
           driver2DMarkerRef.current = driverMarker;
@@ -252,20 +250,100 @@ export default function LiveNavigationCard({ onEndTrip }) {
       })
       .catch((err) => {
         if (!isMounted) return;
-        console.warn("2D Map setup notice:", err.message);
+        console.warn("Map setup notice:", err.message);
       });
 
     return () => { isMounted = false; };
-  }, [viewMode, setIsAutoFollow, mapType, accuracy, latitude, longitude]);
+  }, []);
 
-  // Update 2D Driver Marker Position & Accuracy Circle
+  // ----------------------------------------------------
+  // 3. Dynamic 2D ↔ 3D Camera & Vector Mode Transitions
+  // ----------------------------------------------------
   useEffect(() => {
-    if (viewMode !== "2D" || !map2DInstanceRef.current || !window.google?.maps) return;
+    if (!map2DInstanceRef.current || !window.google?.maps) return;
+    const map = map2DInstanceRef.current;
+
+    if (viewMode === "3D") {
+      // Switch into 3D Cockpit Navigation View
+      map.setTilt(60);
+      if (heading !== null && !isNaN(heading)) {
+        map.setHeading(heading);
+      } else {
+        map.setHeading(45);
+      }
+      map.setZoom(17.5);
+      if (latitude && longitude) {
+        map.panTo({ lat: latitude, lng: longitude });
+      }
+
+      // Try native maps3d element if available
+      loadGoogleLibrary("maps3d")
+        .then((maps3dLib) => {
+          if (!map3DContainerRef.current) return;
+          const { Map3DElement, Marker3DElement } = maps3dLib;
+
+          if (Map3DElement && !map3DInstanceRef.current) {
+            map3DContainerRef.current.innerHTML = "";
+            const map3d = new Map3DElement({
+              center: { lat: latitude || 28.5355, lng: longitude || 77.3910, altitude: 0 },
+              tilt: 60,
+              heading: heading || 45,
+              range: 700
+            });
+            map3d.style.width = "100%";
+            map3d.style.height = "100%";
+            map3d.style.display = "block";
+
+            map3DContainerRef.current.appendChild(map3d);
+            map3DInstanceRef.current = map3d;
+
+            if (Marker3DElement) {
+              const driver3d = new Marker3DElement({
+                position: { lat: latitude || 28.5355, lng: longitude || 77.3910, altitude: 5 },
+                label: "Driver"
+              });
+              map3d.appendChild(driver3d);
+              driver3DMarkerRef.current = driver3d;
+            }
+
+            setIs3DNativeActive(true);
+          }
+        })
+        .catch(() => {
+          setIs3DNativeActive(false);
+        });
+
+    } else {
+      // Switch back to 2D Planar View
+      map.setTilt(0);
+      map.setHeading(0);
+      map.setZoom(15.5);
+      if (latitude && longitude) {
+        map.panTo({ lat: latitude, lng: longitude });
+      }
+      setIs3DNativeActive(false);
+    }
+  }, [viewMode, heading, latitude, longitude]);
+
+  // Update Driver Marker Position & Accuracy Circle continuously
+  useEffect(() => {
+    if (!map2DInstanceRef.current || !window.google?.maps) return;
 
     const newPos = new window.google.maps.LatLng(latitude, longitude);
 
     if (driver2DMarkerRef.current) {
       driver2DMarkerRef.current.setPosition(newPos);
+      if (heading !== null && !isNaN(heading)) {
+        driver2DMarkerRef.current.setIcon({
+          path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+          scale: 6,
+          fillColor: "#2563eb",
+          fillOpacity: 1,
+          strokeColor: "#ffffff",
+          strokeWeight: 2,
+          rotation: heading
+        });
+      }
     }
 
     if (accuracy2DCircleRef.current) {
@@ -275,12 +353,22 @@ export default function LiveNavigationCard({ onEndTrip }) {
 
     if (isAutoFollow) {
       map2DInstanceRef.current.panTo(newPos);
+      if (viewMode === "3D" && heading !== null) {
+        map2DInstanceRef.current.setHeading(heading);
+      }
     }
-  }, [latitude, longitude, accuracy, isAutoFollow, viewMode]);
 
-  // Update 2D Destination Marker & Directions Route
+    if (map3DInstanceRef.current && is3DNativeActive) {
+      map3DInstanceRef.current.center = { lat: latitude, lng: longitude, altitude: 0 };
+      if (driver3DMarkerRef.current) {
+        driver3DMarkerRef.current.position = { lat: latitude, lng: longitude, altitude: 5 };
+      }
+    }
+  }, [latitude, longitude, accuracy, heading, isAutoFollow, viewMode, is3DNativeActive]);
+
+  // Update Destination Marker & Directions Route
   useEffect(() => {
-    if (viewMode !== "2D" || !map2DInstanceRef.current || !window.google?.maps) return;
+    if (!map2DInstanceRef.current || !window.google?.maps) return;
 
     if (destination?.lat && destination?.lng) {
       const destPos = new window.google.maps.LatLng(destination.lat, destination.lng);
@@ -321,122 +409,30 @@ export default function LiveNavigationCard({ onEndTrip }) {
         });
       }
     }
-  }, [destination, routeInfo, viewMode]);
+  }, [destination, routeInfo]);
 
-  // Recenter 2D Map Trigger
+  // Recenter Map Trigger
   useEffect(() => {
     if (recenterTrigger > 0 && map2DInstanceRef.current && window.google?.maps) {
       const pos = new window.google.maps.LatLng(latitude, longitude);
       map2DInstanceRef.current.panTo(pos);
-      map2DInstanceRef.current.setZoom(16);
-    }
-  }, [recenterTrigger, latitude, longitude]);
-
-  // ----------------------------------------------------
-  // 3. Initialize 3D Google Map (Map3DElement)
-  // ----------------------------------------------------
-  useEffect(() => {
-    if (viewMode !== "3D") return;
-    let isMounted = true;
-
-    loadGoogleLibrary("maps3d")
-      .then((maps3dLib) => {
-        if (!isMounted || !map3DContainerRef.current) return;
-        const { Map3DElement, Marker3DElement, Polyline3DElement } = maps3dLib;
-
-        if (!map3DInstanceRef.current) {
-          map3DContainerRef.current.innerHTML = "";
-
-          const map3d = new Map3DElement({
-            center: { lat: latitude || 28.5355, lng: longitude || 77.3910, altitude: 0 },
-            tilt: 60,
-            heading: heading || 0,
-            range: 650
-          });
-
-          map3DContainerRef.current.appendChild(map3d);
-          map3DInstanceRef.current = map3d;
-
-          // Driver 3D Marker
-          if (Marker3DElement) {
-            const driver3d = new Marker3DElement({
-              position: { lat: latitude || 28.5355, lng: longitude || 77.3910, altitude: 5 },
-              label: "Driver"
-            });
-            map3d.appendChild(driver3d);
-            driver3DMarkerRef.current = driver3d;
-          }
-
-          // Destination 3D Marker
-          if (destination && Marker3DElement) {
-            const dest3d = new Marker3DElement({
-              position: { lat: destination.lat, lng: destination.lng, altitude: 5 },
-              label: destination.name
-            });
-            map3d.appendChild(dest3d);
-            dest3DMarkerRef.current = dest3d;
-          }
-
-          // 3D Route Polyline
-          if (Polyline3DElement && routeInfo?.polylinePath?.length > 0) {
-            const poly3d = new Polyline3DElement({
-              coordinates: routeInfo.polylinePath.map(p => ({ lat: p.lat, lng: p.lng, altitude: 2 })),
-              strokeColor: "#2563eb",
-              strokeWidth: 6
-            });
-            map3d.appendChild(poly3d);
-            routePolyline3DRef.current = poly3d;
-          }
-        } else {
-          map3DInstanceRef.current.center = { lat: latitude || 28.5355, lng: longitude || 77.3910, altitude: 0 };
-        }
-
-        setIs3DSupported(true);
-      })
-      .catch((err) => {
-        if (!isMounted) return;
-        console.warn("3D Map initialization notice (graceful fallback):", err.message);
-        setIs3DSupported(false);
-        setViewMode("2D");
-      });
-
-    return () => { isMounted = false; };
-  }, [viewMode, destination, heading, latitude, longitude, routeInfo?.polylinePath, setIs3DSupported, setViewMode]);
-
-  // Update 3D Camera & Driver Position
-  useEffect(() => {
-    if (viewMode !== "3D" || !map3DInstanceRef.current) return;
-
-    if (isAutoFollow) {
-      map3DInstanceRef.current.center = { lat: latitude, lng: longitude, altitude: 0 };
-      if (heading !== null && !isNaN(heading)) {
-        map3DInstanceRef.current.heading = heading;
+      if (viewMode === "3D") {
+        map2DInstanceRef.current.setTilt(60);
+        map2DInstanceRef.current.setZoom(17.5);
+        if (heading !== null) map2DInstanceRef.current.setHeading(heading);
+      } else {
+        map2DInstanceRef.current.setTilt(0);
+        map2DInstanceRef.current.setZoom(16);
+        map2DInstanceRef.current.setHeading(0);
       }
     }
-
-    if (driver3DMarkerRef.current) {
-      driver3DMarkerRef.current.position = { lat: latitude, lng: longitude, altitude: 5 };
-    }
-  }, [latitude, longitude, heading, isAutoFollow, viewMode]);
-
-  // Recenter in 3D Mode
-  useEffect(() => {
-    if (recenterTrigger > 0 && viewMode === "3D" && map3DInstanceRef.current) {
-      map3DInstanceRef.current.center = { lat: latitude, lng: longitude, altitude: 0 };
-      map3DInstanceRef.current.tilt = 60;
-      map3DInstanceRef.current.range = 650;
-      if (heading !== null) map3DInstanceRef.current.heading = heading;
-    }
-  }, [recenterTrigger, latitude, longitude, heading, viewMode]);
+  }, [recenterTrigger, latitude, longitude, viewMode, heading]);
 
   // Zoom controls
   const handleZoom = (delta) => {
-    if (viewMode === "2D" && map2DInstanceRef.current) {
+    if (map2DInstanceRef.current) {
       const curr = map2DInstanceRef.current.getZoom() || 15.5;
       map2DInstanceRef.current.setZoom(curr + delta);
-    } else if (viewMode === "3D" && map3DInstanceRef.current) {
-      const currentRange = map3DInstanceRef.current.range || 650;
-      map3DInstanceRef.current.range = Math.max(150, Math.min(2500, currentRange - delta * 200));
     }
   };
 
@@ -460,6 +456,11 @@ export default function LiveNavigationCard({ onEndTrip }) {
   };
 
   const ManeuverIcon = getManeuverIcon(routeInfo?.maneuver);
+
+  // Clean road display name
+  const cleanRoadDisplay = currentRoad && !currentRoad.includes("+") 
+    ? currentRoad 
+    : "NH 44 Highway Corridor";
 
   return (
     <div className="flex flex-col gap-3.5 h-full relative">
@@ -486,13 +487,7 @@ export default function LiveNavigationCard({ onEndTrip }) {
               2D
             </button>
             <button
-              onClick={() => {
-                if (!is3DSupported) {
-                  alert("Photorealistic 3D is not supported on this browser context. Reverting to 2D view.");
-                  return;
-                }
-                setViewMode("3D");
-              }}
+              onClick={() => setViewMode("3D")}
               className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 viewMode === "3D" ? "bg-blue-600 text-white shadow-2xs" : "text-slate-500 hover:text-slate-800"
               }`}
@@ -602,23 +597,21 @@ export default function LiveNavigationCard({ onEndTrip }) {
         )}
       </div>
 
-      {/* 3. Main Map Viewport (2D / 3D Canvas) */}
+      {/* 3. Main Map Viewport (2D / 3D Perspective Canvas) */}
       <div className="relative w-full flex-1 min-h-[380px] lg:min-h-[460px] rounded-3xl overflow-hidden glass-panel border border-white shadow-lg bg-[#f1f5f9]">
-        {/* 2D Google Map View */}
+        {/* Main Google Map View (handles 2D & 3D Perspective smoothly) */}
         <div 
           ref={map2DContainerRef} 
-          className={`absolute inset-0 w-full h-full transition-opacity duration-300 ${
-            viewMode === "2D" ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0"
-          }`} 
+          className="absolute inset-0 w-full h-full z-10" 
         />
 
-        {/* 3D Google Map View (Map3DElement) */}
-        <div 
-          ref={map3DContainerRef} 
-          className={`absolute inset-0 w-full h-full transition-opacity duration-300 ${
-            viewMode === "3D" ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0"
-          }`} 
-        />
+        {/* Optional Native Maps 3D Overlay Container */}
+        {is3DNativeActive && (
+          <div 
+            ref={map3DContainerRef} 
+            className="absolute inset-0 w-full h-full z-15" 
+          />
+        )}
 
         {/* Top-Left Dynamic Turn-by-Turn Guidance Banner */}
         <div className="absolute top-4 left-4 z-20 flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-emerald-800/95 text-white shadow-xl backdrop-blur-md border border-emerald-600/40 min-w-[210px] max-w-[320px] animate-in fade-in slide-in-from-top-2">
@@ -635,6 +628,14 @@ export default function LiveNavigationCard({ onEndTrip }) {
           </div>
         </div>
 
+        {/* 3D Mode Badge Indicator */}
+        {viewMode === "3D" && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full bg-blue-600/90 text-white text-[11px] font-bold shadow-lg backdrop-blur-md flex items-center gap-1.5 animate-in fade-in">
+            <Box className="w-3.5 h-3.5" />
+            <span>3D Cockpit View (Tilt: 60°)</span>
+          </div>
+        )}
+
         {/* Floating Map Controls (Right Side) */}
         <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
           {/* Mute/Unmute Voice Guidance */}
@@ -647,15 +648,13 @@ export default function LiveNavigationCard({ onEndTrip }) {
           </button>
 
           {/* Map Layer Switcher (2D Roadmap / Hybrid Satellite) */}
-          {viewMode === "2D" && (
-            <button
-              onClick={toggleMapType}
-              className="p-2.5 rounded-xl bg-white/90 hover:bg-white text-slate-700 shadow-md border border-white backdrop-blur-md transition-all active:scale-95 cursor-pointer"
-              title={`Switch to ${mapType === "roadmap" ? "Satellite" : "Roadmap"} View`}
-            >
-              <Layers className="w-4 h-4 text-slate-700" />
-            </button>
-          )}
+          <button
+            onClick={toggleMapType}
+            className="p-2.5 rounded-xl bg-white/90 hover:bg-white text-slate-700 shadow-md border border-white backdrop-blur-md transition-all active:scale-95 cursor-pointer"
+            title={`Switch to ${mapType === "roadmap" ? "Satellite" : "Roadmap"} View`}
+          >
+            <Layers className="w-4 h-4 text-slate-700" />
+          </button>
 
           {/* Recenter Driver GPS */}
           <button
@@ -715,7 +714,7 @@ export default function LiveNavigationCard({ onEndTrip }) {
             <div className="flex justify-between"><span>GPS State:</span> <strong className="text-emerald-400 uppercase">{gpsStatus}</strong></div>
             <div className="flex justify-between"><span>Auto-Follow:</span> <strong className={isAutoFollow ? "text-emerald-400" : "text-amber-400"}>{isAutoFollow ? "ACTIVE" : "PAUSED"}</strong></div>
             <div className="pt-1 border-t border-slate-800 text-[9px] text-slate-400 truncate">
-              Road: {currentRoad || "NH 44"}
+              Road: {cleanRoadDisplay}
             </div>
           </div>
         )}
@@ -743,7 +742,7 @@ export default function LiveNavigationCard({ onEndTrip }) {
 
             <div className="border-l border-slate-200 pl-3 sm:pl-6 hidden sm:block">
               <div className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight truncate max-w-[140px]">
-                {currentRoad || "NH 44"}
+                {cleanRoadDisplay}
               </div>
               <div className="text-[10px] sm:text-[11px] font-medium text-slate-500 truncate max-w-[140px]">
                 {destination ? `To: ${destination.name}` : "Current Route"}

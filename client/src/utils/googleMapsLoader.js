@@ -78,12 +78,11 @@ export function initGoogleMapsBootstrap(apiKey = import.meta.env.VITE_GOOGLE_MAP
 
   bootstrapPromise = new Promise((resolve, reject) => {
     try {
-      // Official Google Maps dynamic inline bootstrap loader
       (g => {
         var h, a, k, p = "The Google Maps JavaScript API", c = "google", l = "importLibrary", q = "__ib__", m = document, b = window;
         b = b[c] || (b[c] = {});
-        var d = b.maps || (b.maps = {}), r = new Set(), e = new URLSearchParams(), u = () => h || (h = new Promise(async (f, n) => {
-          await (a = m.createElement("script"));
+        var d = b.maps || (b.maps = {}), r = new Set(), e = new URLSearchParams(), u = () => h || (h = new Promise((f, n) => {
+          a = m.createElement("script");
           e.set("libraries", [...r] + "");
           for (k in g) e.set(k.replace(/[A-Z]/g, t => "_" + t[0].toLowerCase()), g[k]);
           e.set("callback", c + ".maps." + q);
@@ -97,10 +96,14 @@ export function initGoogleMapsBootstrap(apiKey = import.meta.env.VITE_GOOGLE_MAP
           a.nonce = m.querySelector("script[nonce]")?.nonce || "";
           m.head.append(a);
         }));
-        d[l] ? console.warn(p + " only loads once.") : d[l] = (f, ...n) => r.add(f) && u().then(() => d[l](f, ...n));
+        if (d[l]) {
+          console.warn(p + " only loads once.");
+        } else {
+          d[l] = (f, ...n) => { r.add(f); return u().then(() => d[l](f, ...n)); };
+        }
       })({
         key: apiKey,
-        v: "weekly"
+        v: "alpha"
       });
 
       // Eagerly preload standard libraries
