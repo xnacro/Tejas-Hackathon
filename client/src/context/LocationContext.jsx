@@ -1,11 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
-import { 
-  loadGoogleMaps, 
-  calculateHaversineDistance, 
-  sanitizeInstruction, 
-  formatDuration, 
-  calculateETA 
-} from "../utils/googleMapsLoader";
+﻿import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import { reverseGeocode } from "../utils/geocodingService";
 
 const LocationContext = createContext(null);
 
@@ -39,150 +33,31 @@ export function LocationProvider({ children }) {
   const [currentRoad, setCurrentRoad] = useState(DEFAULT_COORDS.currentRoad);
   const [isGeocoding, setIsGeocoding] = useState(false);
 
-  // Active Destination & Navigation Route
-  const [destination, setDestination] = useState({
-    name: "Patna Junction",
-    address: "Patna Railway Station, Bihar, India",
-    lat: 25.6022,
-    lng: 85.1376
-  });
-
-  const [routeInfo, setRouteInfo] = useState({
-    distanceText: "38 km",
-    distanceKm: 38.0,
-    durationText: "56 min",
-    durationSeconds: 3360,
-    eta: calculateETA(3360),
-    currentInstruction: "Turn right onto NH 44 Expressway",
-    nextDistance: "1.2 km",
-    maneuver: "turn-right",
-    status: "ACTIVE",
-    steps: []
-  });
-
+  // Map Follow State & Recenter
   const [isAutoFollow, setIsAutoFollow] = useState(true);
   const [recenterCount, setRecenterCount] = useState(0);
 
-  // Refs for tracking movement without triggering excess renders
-  const lastGeocodedRef = useRef({ lat: null, lng: null, time: 0 });
   const watchIdRef = useRef(null);
   const isFirstFixRef = useRef(true);
 
-  // Throttled reverse geocode function
-  const reverseGeocode = useCallback(async (lat, lng) => {
+  // Throttled Geocoding Handler
+  const handleGeocoding = useCallback(async (lat, lng) => {
     if (!lat || !lng) return;
-
-    const now = Date.now();
-    const last = lastGeocodedRef.current;
-    if (last.lat && last.lng) {
-      const dist = calculateHaversineDistance(last.lat, last.lng, lat, lng);
-      // Only reverse geocode if moved > 150m or > 45 seconds passed
-      if (dist < 0.15 && now - last.time < 45000) {
-        return;
-      }
-    }
-
-    lastGeocodedRef.current = { lat, lng, time: now };
     setIsGeocoding(true);
-
     try {
-      if (window.google && window.google.maps && window.google.maps.Geocoder) {
-        const geocoder = new window.google.maps.Geocoder();
-        geocoder.geocode({ location: { lat, lng } }, (results, status) => {
-          setIsGeocoding(false);
-          if (status === "OK" && results && results[0]) {
-            const fullAddr = results[0].formatted_address;
-            setFormattedAddress(fullAddr);
-
-            // Extract road or route name from address components
-            const routeComp = results[0].address_components?.find(c =>
-              c.types.includes("route") || c.types.includes("sublocality")
-            );
-            const roadName = routeComp ? routeComp.short_name || routeComp.long_name : fullAddr.split(",")[0];
-            setCurrentRoad(roadName || "NH 44");
-          }
-        });
-      } else {
-        // Fallback geocode representation
-        setIsGeocoding(false);
-        const approxRoad = `NH 44 (Lat: ${lat.toFixed(4)}�, Lng: ${lng.toFixed(4)}�)`;
-        setCurrentRoad(approxRoad);
-        setFormattedAddress(`Near ${approxRoad}, Uttar Pradesh, India`);
+      const geo = await reverseGeocode(lat, lng);
+      if (geo) {
+        setFormattedAddress(geo.formattedAddress);
+        setCurrentRoad(geo.currentRoad);
       }
     } catch (e) {
+      console.warn("Geocoding notice:", e.message);
+    } finally {
       setIsGeocoding(false);
-      console.warn("Geocoding failed gracefully:", e);
     }
   }, []);
 
-  // Recalculate route to destination
-  const calculateRoute = useCallback((dest, originCoords = coords) => {
-    const originLat = originCoords.latitude || DEFAULT_COORDS.latitude;
-    const originLng = originCoords.longitude || DEFAULT_COORDS.longitude;
-
-    if (!dest || !dest.lat || !dest.lng) return;
-
-    // 1. If Google DirectionsService is available
-    if (window.google && window.google.maps && window.google.maps.DirectionsService) {
-      const directionsService = new window.google.maps.DirectionsService();
-      directionsService.route(
-        {
-          origin: { lat: originLat, lng: originLng },
-          destination: { lat: dest.lat, lng: dest.lng },
-          travelMode: window.google.maps.TravelMode.DRIVING
-        },
-        (result, status) => {
-          if (status === "OK" && result.routes && result.routes[0]) {
-            const leg = result.routes[0].legs[0];
-            const firstStep = leg.steps && leg.steps[0];
-            const cleanInstruction = firstStep ? sanitizeInstruction(firstStep.instructions) : "Continue on route";
-
-            setRouteInfo({
-              distanceText: leg.distance.text,
-              distanceKm: (leg.distance.value / 1000).toFixed(1),
-              durationText: leg.duration.text,
-              durationSeconds: leg.duration.value,
-              eta: calculateETA(leg.duration.value),
-              currentInstruction: cleanInstruction,
-              nextDistance: firstStep ? firstStep.distance.text : "1.0 km",
-              maneuver: firstStep?.maneuver || "turn-right",
-              status: "ACTIVE",
-              directionsResult: result,
-              steps: leg.steps || []
-            });
-            return;
-          }
-        }
-      );
-    }
-
-    // 2. Resilient geodesic calculation fallback
-    const distKm = calculateHaversineDistance(originLat, originLng, dest.lat, dest.lng);
-    const estSpeedKmh = coords.speedKmh && coords.speedKmh > 20 ? coords.speedKmh : 55;
-    const estDurationMinutes = Math.max(2, Math.round((distKm / estSpeedKmh) * 60));
-    const durationSec = estDurationMinutes * 60;
-
-    setRouteInfo({
-      distanceText: `${distKm} km`,
-      distanceKm: distKm,
-      durationText: formatDuration(durationSec),
-      durationSeconds: durationSec,
-      eta: calculateETA(durationSec),
-      currentInstruction: `Continue toward ${dest.name}`,
-      nextDistance: distKm > 2 ? "1.5 km" : "500 m",
-      maneuver: "straight",
-      status: "ACTIVE",
-      steps: []
-    });
-  }, [coords]);
-
-  // Select a new destination
-  const selectDestination = useCallback((newDest) => {
-    setDestination(newDest);
-    calculateRoute(newDest, coords);
-  }, [coords, calculateRoute]);
-
-  // Recenter map trigger
+  // Recenter trigger
   const triggerRecenter = useCallback(() => {
     setIsAutoFollow(true);
     setRecenterCount(c => c + 1);
@@ -190,7 +65,7 @@ export function LocationProvider({ children }) {
 
   // Setup navigator.geolocation.watchPosition
   useEffect(() => {
-    if (!navigator.geolocation) {
+    if (typeof window === "undefined" || !navigator.geolocation) {
       setGpsStatus("unsupported");
       setGpsStatusMessage("Geolocation unsupported in this browser.");
       setCoords(prev => ({
@@ -230,21 +105,21 @@ export function LocationProvider({ children }) {
       // Assess signal strength
       if (accuracy > 75) {
         setGpsStatus("weak");
-        setGpsStatusMessage(`Weak GPS (�${Math.round(accuracy)}m)`);
+        setGpsStatusMessage(`Weak GPS (±${Math.round(accuracy)}m)`);
       } else {
         setGpsStatus("connected");
-        setGpsStatusMessage(`GPS Connected (�${Math.round(accuracy)}m)`);
+        setGpsStatusMessage(`GPS Connected (±${Math.round(accuracy)}m)`);
       }
 
-      // Initial fix handling
+      // Initial fix handling & geocoding
       if (isFirstFixRef.current) {
         isFirstFixRef.current = false;
-        reverseGeocode(latitude, longitude);
+        handleGeocoding(latitude, longitude);
       } else {
-        reverseGeocode(latitude, longitude);
+        handleGeocoding(latitude, longitude);
       }
 
-      // Send telemetry update to backend
+      // Sync telemetry with backend
       fetch("/api/location/current", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -259,7 +134,7 @@ export function LocationProvider({ children }) {
     };
 
     const handleError = (err) => {
-      console.warn("GPS watchPosition notice (fallback active):", err);
+      console.warn("GPS watchPosition status:", err.message);
       switch (err.code) {
         case 1: // PERMISSION_DENIED
           setGpsStatus("denied");
@@ -278,7 +153,7 @@ export function LocationProvider({ children }) {
           setGpsStatusMessage("GPS Error");
       }
 
-      // Keep safe fallback coordinates so user can still test/interact with map
+      // Keep safe fallback coordinates so the UI continues functioning
       setCoords(prev => ({
         ...prev,
         latitude: prev.latitude || DEFAULT_COORDS.latitude,
@@ -303,7 +178,7 @@ export function LocationProvider({ children }) {
         navigator.geolocation.clearWatch(watchIdRef.current);
       }
     };
-  }, [reverseGeocode]);
+  }, [handleGeocoding]);
 
   const activeLat = coords.latitude || DEFAULT_COORDS.latitude;
   const activeLng = coords.longitude || DEFAULT_COORDS.longitude;
@@ -322,10 +197,6 @@ export function LocationProvider({ children }) {
         formattedAddress,
         currentRoad,
         isGeocoding,
-        destination,
-        routeInfo,
-        selectDestination,
-        calculateRoute,
         isAutoFollow,
         setIsAutoFollow,
         recenterTrigger: recenterCount,

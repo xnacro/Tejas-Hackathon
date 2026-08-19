@@ -1,19 +1,20 @@
-import React from "react";
+﻿import React from "react";
 import { 
   Fuel, 
   Utensils, 
   Bed, 
   HeartPulse, 
   ShieldAlert, 
-  ChevronRight,
   MapPin,
   Navigation
 } from "lucide-react";
 import { useLocation } from "../context/LocationContext";
+import { useNavigation } from "../context/NavigationContext";
 import { calculateHaversineDistance } from "../utils/googleMapsLoader";
 
 export default function NearbyServicesCard({ services, onSelectService, onViewAll }) {
-  const { coords, selectDestination } = useLocation();
+  const { coords } = useLocation();
+  const { selectDestination } = useNavigation();
   const { latitude, longitude } = coords;
 
   const defaultServices = [
@@ -66,7 +67,8 @@ export default function NearbyServicesCard({ services, onSelectService, onViewAl
         name: item.name || item.type,
         address: item.location || `${item.name || item.type} along highway corridor`,
         lat: item.coordinates.lat,
-        lng: item.coordinates.lng
+        lng: item.coordinates.lng,
+        category: item.type
       });
     }
     if (onSelectService) {
@@ -116,4 +118,3 @@ export default function NearbyServicesCard({ services, onSelectService, onViewAl
     </div>
   );
 }
-

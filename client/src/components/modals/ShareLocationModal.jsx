@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Radio, Copy, Check, ShieldCheck, ToggleLeft, ToggleRight, Share2 } from "lucide-react";
+import { X, Radio, Copy, Check, ShieldCheck, ToggleLeft, ToggleRight } from "lucide-react";
 
 export default function ShareLocationModal({ isOpen, onClose }) {
   const [sessions, setSessions] = useState([

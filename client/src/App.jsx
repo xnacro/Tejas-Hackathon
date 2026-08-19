@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import io from "socket.io-client";
 
 import { LocationProvider } from "./context/LocationContext";
+import { NavigationProvider } from "./context/NavigationContext";
 import Header from "./components/Header";
 import CenterNav from "./components/CenterNav";
 import DriverMonitoringCard from "./components/DriverMonitoringCard";
@@ -128,7 +129,7 @@ function DashboardContent() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col justify-between p-3 sm:p-5 max-w-[1600px] mx-auto select-none">
+    <div className="min-h-screen w-full flex flex-col justify-between p-3 sm:p-5 max-w-[1600px] mx-auto select-none font-sans">
       {/* 1. Header */}
       <Header
         profile={profile}
@@ -165,8 +166,7 @@ function DashboardContent() {
         {/* Center Column: Live Navigation Map (4-5 Cols) */}
         <div className="lg:col-span-4 xl:col-span-4 flex flex-col justify-between">
           <LiveNavigationCard
-            telemetry={telemetry}
-            onEndTrip={() => alert("Trip completed. Drive safe!")}
+            onEndTrip={() => alert("Trip completed. Drive safely with Surakha AI!")}
           />
         </div>
 
@@ -180,9 +180,7 @@ function DashboardContent() {
 
           <NearbyServicesCard
             services={services}
-            onSelectService={(srv) => {
-              // Service clicked -> active destination set in LocationContext
-            }}
+            onSelectService={() => {}}
             onViewAll={() => setIsRulesOpen(true)}
           />
         </div>
@@ -223,9 +221,7 @@ function DashboardContent() {
       <RestAreaModal
         isOpen={isRestAreaOpen}
         onClose={() => setIsRestAreaOpen(false)}
-        onNavigate={() => {
-          // Handled inside modal via LocationContext
-        }}
+        onNavigate={() => {}}
       />
 
       <NotificationsModal
@@ -240,8 +236,9 @@ function DashboardContent() {
 export default function App() {
   return (
     <LocationProvider>
-      <DashboardContent />
+      <NavigationProvider>
+        <DashboardContent />
+      </NavigationProvider>
     </LocationProvider>
   );
 }
-

@@ -5,7 +5,6 @@ import {
   PhoneCall, 
   Hospital, 
   ShieldAlert, 
-  Send, 
   CheckCircle2, 
   Volume2, 
   VolumeX, 

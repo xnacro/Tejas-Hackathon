@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import { 
-  Navigation, 
   CornerUpRight, 
   CornerUpLeft,
   ArrowUp,
@@ -15,25 +14,25 @@ import {
   MapPin,
   Search,
   X,
-  Compass,
-  Radio,
   Layers,
   AlertCircle,
   Activity,
-  ChevronDown,
-  ChevronUp
+  Box
 } from "lucide-react";
 import { useLocation } from "../context/LocationContext";
-import { loadGoogleMaps, SURAKHA_MAP_STYLES } from "../utils/googleMapsLoader";
+import { useNavigation } from "../context/NavigationContext";
+import { 
+  loadGoogleLibrary, 
+  SURAKHA_MAP_STYLES 
+} from "../utils/googleMapsLoader";
 
-// Preset popular destinations for quick lookup & autocomplete testing
 const POPULAR_DESTINATIONS = [
-  { name: "Patna Junction", address: "Patna Railway Station, Bihar, India", lat: 25.6022, lng: 85.1376, category: "Transit" },
-  { name: "IIT Guwahati", address: "Amingaon, Guwahati, Assam, India", lat: 26.1878, lng: 91.6916, category: "University" },
-  { name: "AIIMS Patna", address: "Phulwari Sharif, Patna, Bihar, India", lat: 25.5606, lng: 85.0456, category: "Hospital" },
-  { name: "GEC Jamui", address: "Government Engineering College, Jamui, Bihar", lat: 24.9194, lng: 86.2238, category: "College" },
-  { name: "Delhi Indira Gandhi Airport", address: "New Delhi, Delhi 110037, India", lat: 28.5562, lng: 77.1000, category: "Airport" },
-  { name: "Highway Oasis Rest Area", address: "NH 44, Mile 238 Highway Rest Hub", lat: 28.5600, lng: 77.4100, category: "Rest Stop" },
+  { name: "Patna Junction", address: "Patna Railway Station, Bihar 800001", lat: 25.6022, lng: 85.1376, category: "Transit" },
+  { name: "IIT Guwahati", address: "Amingaon, North Guwahati, Assam 781039", lat: 26.1878, lng: 91.6916, category: "University" },
+  { name: "AIIMS Patna", address: "Phulwari Sharif, Patna, Bihar 801507", lat: 25.5606, lng: 85.0456, category: "Hospital" },
+  { name: "GEC Jamui", address: "Government Engineering College, Jamui, Bihar 811313", lat: 24.9194, lng: 86.2238, category: "College" },
+  { name: "Delhi Indira Gandhi Airport", address: "New Delhi, Delhi 110037", lat: 28.5562, lng: 77.1000, category: "Airport" },
+  { name: "Highway Oasis Rest Complex", address: "NH 44, Mile 238 Highway Rest Hub", lat: 28.5600, lng: 77.4100, category: "Rest Stop" },
   { name: "Indian Oil Swagat Fuel Complex", address: "NH 44 Mile 231 Diesel Depot", lat: 28.5390, lng: 77.3940, category: "Fuel" }
 ];
 
@@ -42,240 +41,415 @@ export default function LiveNavigationCard({ onEndTrip }) {
     coords, 
     gpsStatus, 
     gpsStatusMessage, 
-    formattedAddress, 
     currentRoad, 
-    destination, 
-    routeInfo, 
-    selectDestination, 
-    calculateRoute, 
     isAutoFollow, 
     setIsAutoFollow, 
     recenterTrigger, 
     triggerRecenter 
   } = useLocation();
 
+  const { 
+    destination, 
+    selectDestination, 
+    routeInfo, 
+    viewMode, 
+    setViewMode,
+    is3DSupported,
+    setIs3DSupported
+  } = useNavigation();
+
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [placesSuggestions, setPlacesSuggestions] = useState(POPULAR_DESTINATIONS);
   const [showDebug, setShowDebug] = useState(false);
-  const [mapType, setMapType] = useState("roadmap"); // 'roadmap' | 'satellite'
-  const [isGoogleMapLoaded, setIsGoogleMapLoaded] = useState(false);
-  const [googleMapError, setGoogleMapError] = useState(null);
+  const [mapType, setMapType] = useState("roadmap"); // 'roadmap' | 'hybrid'
 
-  const mapContainerRef = useRef(null);
-  const googleMapInstanceRef = useRef(null);
-  const driverMarkerRef = useRef(null);
-  const accuracyCircleRef = useRef(null);
-  const destMarkerRef = useRef(null);
-  const directionsRendererRef = useRef(null);
-  const searchInputRef = useRef(null);
+  const map2DContainerRef = useRef(null);
+  const map3DContainerRef = useRef(null);
+  
+  // Google 2D Map Refs
+  const map2DInstanceRef = useRef(null);
+  const driver2DMarkerRef = useRef(null);
+  const accuracy2DCircleRef = useRef(null);
+  const dest2DMarkerRef = useRef(null);
+  const directions2DRendererRef = useRef(null);
+  const routePolyline2DRef = useRef(null);
+
+  // Google 3D Map Refs
+  const map3DInstanceRef = useRef(null);
+  const driver3DMarkerRef = useRef(null);
+  const dest3DMarkerRef = useRef(null);
+  const routePolyline3DRef = useRef(null);
+
+  // Autocomplete service ref
+  const autocompleteServiceRef = useRef(null);
+  const placesServiceRef = useRef(null);
 
   const { latitude, longitude, accuracy, heading, speedKmh } = coords;
 
-  // 1. Initialize Google Maps
+  // ----------------------------------------------------
+  // 1. Initialize Google Places Autocomplete Service
+  // ----------------------------------------------------
   useEffect(() => {
+    let mounted = true;
+    loadGoogleLibrary("places")
+      .then((placesLib) => {
+        if (!mounted) return;
+        const { AutocompleteService, PlacesService } = placesLib;
+        autocompleteServiceRef.current = new AutocompleteService();
+        const dummyNode = document.createElement("div");
+        placesServiceRef.current = new PlacesService(dummyNode);
+      })
+      .catch((err) => {
+        console.warn("Places library notice:", err.message);
+      });
+
+    return () => { mounted = false; };
+  }, []);
+
+  // Handle predictive places search debounced
+  useEffect(() => {
+    if (!searchQuery || searchQuery.trim() === "") {
+      setPlacesSuggestions(POPULAR_DESTINATIONS);
+      return;
+    }
+
+    if (autocompleteServiceRef.current) {
+      autocompleteServiceRef.current.getPlacePredictions(
+        {
+          input: searchQuery,
+          componentRestrictions: { country: "in" }
+        },
+        (predictions, status) => {
+          if (status === "OK" && predictions && predictions.length > 0) {
+            const mapped = predictions.map(p => ({
+              name: p.structured_formatting?.main_text || p.description,
+              address: p.structured_formatting?.secondary_text || p.description,
+              placeId: p.place_id,
+              category: "Google Place"
+            }));
+            setPlacesSuggestions(mapped);
+          } else {
+            const filtered = POPULAR_DESTINATIONS.filter(d =>
+              d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+              d.address.toLowerCase().includes(searchQuery.toLowerCase())
+            );
+            setPlacesSuggestions(filtered);
+          }
+        }
+      );
+    }
+  }, [searchQuery]);
+
+  // Handle destination select
+  const handleSelectPlace = (place) => {
+    if (place.lat && place.lng) {
+      selectDestination(place);
+      setSearchQuery(place.name);
+      setIsSearchOpen(false);
+      return;
+    }
+
+    if (place.placeId && placesServiceRef.current) {
+      placesServiceRef.current.getDetails(
+        { placeId: place.placeId, fields: ["name", "formatted_address", "geometry"] },
+        (details, status) => {
+          if (status === "OK" && details?.geometry?.location) {
+            const resolved = {
+              name: details.name || place.name,
+              address: details.formatted_address || place.address,
+              lat: details.geometry.location.lat(),
+              lng: details.geometry.location.lng(),
+              category: "Place"
+            };
+            selectDestination(resolved);
+            setSearchQuery(resolved.name);
+            setIsSearchOpen(false);
+          }
+        }
+      );
+    }
+  };
+
+  // ----------------------------------------------------
+  // 2. Initialize 2D Google Map
+  // ----------------------------------------------------
+  useEffect(() => {
+    if (viewMode !== "2D") return;
     let isMounted = true;
 
-    loadGoogleMaps()
-      .then((googleMaps) => {
-        if (!isMounted || !mapContainerRef.current) return;
+    Promise.all([
+      loadGoogleLibrary("maps"),
+      loadGoogleLibrary("marker").catch(() => null)
+    ])
+      .then(([mapsLib]) => {
+        if (!isMounted || !map2DContainerRef.current) return;
 
         const initialPos = { lat: latitude || 28.5355, lng: longitude || 77.3910 };
 
-        // Create Google Map
-        const map = new googleMaps.Map(mapContainerRef.current, {
-          center: initialPos,
-          zoom: 15,
-          disableDefaultUI: true,
-          zoomControl: false,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: false,
-          styles: SURAKHA_MAP_STYLES,
-          mapTypeId: mapType
-        });
+        if (!map2DInstanceRef.current) {
+          const map = new mapsLib.Map(map2DContainerRef.current, {
+            center: initialPos,
+            zoom: 15.5,
+            disableDefaultUI: true,
+            zoomControl: false,
+            mapTypeControl: false,
+            streetViewControl: false,
+            fullscreenControl: false,
+            styles: SURAKHA_MAP_STYLES,
+            mapTypeId: mapType
+          });
 
-        googleMapInstanceRef.current = map;
-        setIsGoogleMapLoaded(true);
+          map2DInstanceRef.current = map;
 
-        // Detect user manual interaction to pause auto-follow
-        map.addListener("dragstart", () => setIsAutoFollow(false));
-        map.addListener("zoom_changed", () => {
-          // If zoom was triggered manually (not programmatically), pause auto-follow
-        });
+          // Detect manual interaction to pause auto-follow
+          map.addListener("dragstart", () => setIsAutoFollow(false));
 
-        // Driver Marker (Surakha Blue Pulse Icon)
-        const driverIcon = {
-          path: googleMaps.SymbolPath.CIRCLE,
-          scale: 9,
-          fillColor: "#2563eb",
-          fillOpacity: 1,
-          strokeColor: "#ffffff",
-          strokeWeight: 3.5
-        };
-
-        const marker = new googleMaps.Marker({
-          position: initialPos,
-          map,
-          icon: driverIcon,
-          title: "Driver Current Location",
-          zIndex: 999
-        });
-        driverMarkerRef.current = marker;
-
-        // Accuracy Circle
-        const circle = new googleMaps.Circle({
-          center: initialPos,
-          radius: accuracy || 25,
-          map,
-          fillColor: "#3b82f6",
-          fillOpacity: 0.15,
-          strokeColor: "#60a5fa",
-          strokeOpacity: 0.5,
-          strokeWeight: 1.5,
-          zIndex: 1
-        });
-        accuracyCircleRef.current = circle;
-
-        // Destination Marker
-        if (destination) {
-          const destMarker = new googleMaps.Marker({
-            position: { lat: destination.lat, lng: destination.lng },
+          // Accuracy Circle
+          const circle = new window.google.maps.Circle({
+            center: initialPos,
+            radius: accuracy || 20,
             map,
-            title: destination.name,
+            fillColor: "#3b82f6",
+            fillOpacity: 0.15,
+            strokeColor: "#60a5fa",
+            strokeOpacity: 0.6,
+            strokeWeight: 1.5,
+            zIndex: 10
+          });
+          accuracy2DCircleRef.current = circle;
+
+          // Driver Marker (Surakha Blue Pulse Icon)
+          const driverMarker = new window.google.maps.Marker({
+            position: initialPos,
+            map,
+            title: "Driver Current Location",
+            zIndex: 999,
             icon: {
-              path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
-              fillColor: "#ef4444",
+              path: window.google.maps.SymbolPath.CIRCLE,
+              scale: 9,
+              fillColor: "#2563eb",
               fillOpacity: 1,
               strokeColor: "#ffffff",
-              strokeWeight: 2,
-              scale: 1.5,
-              anchor: new googleMaps.Point(12, 22)
+              strokeWeight: 3.5
             }
           });
-          destMarkerRef.current = destMarker;
-        }
+          driver2DMarkerRef.current = driverMarker;
 
-        // Directions Renderer
-        const directionsRenderer = new googleMaps.DirectionsRenderer({
-          map,
-          suppressMarkers: true,
-          polylineOptions: {
-            strokeColor: "#2563eb",
-            strokeOpacity: 0.9,
-            strokeWeight: 6
-          }
-        });
-        directionsRendererRef.current = directionsRenderer;
-
-        // Setup Places Autocomplete on the input
-        if (searchInputRef.current && googleMaps.places) {
-          const autocomplete = new googleMaps.places.Autocomplete(searchInputRef.current, {
-            fields: ["formatted_address", "geometry", "name"]
-          });
-          autocomplete.addListener("place_changed", () => {
-            const place = autocomplete.getPlace();
-            if (place.geometry && place.geometry.location) {
-              const newDest = {
-                name: place.name || "Selected Destination",
-                address: place.formatted_address || "",
-                lat: place.geometry.location.lat(),
-                lng: place.geometry.location.lng()
-              };
-              selectDestination(newDest);
-              setIsSearchOpen(false);
-              setSearchQuery("");
+          // Directions Renderer
+          const directionsRenderer = new window.google.maps.DirectionsRenderer({
+            map,
+            suppressMarkers: true,
+            polylineOptions: {
+              strokeColor: "#2563eb",
+              strokeOpacity: 0.9,
+              strokeWeight: 6
             }
           });
-        }
-
-        // Initial route calculation
-        if (destination) {
-          calculateRoute(destination, coords);
+          directions2DRendererRef.current = directionsRenderer;
         }
       })
       .catch((err) => {
         if (!isMounted) return;
-        console.info("Google Maps status:", err.message);
-        setGoogleMapError(err.message);
+        console.warn("2D Map setup notice:", err.message);
       });
 
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+    return () => { isMounted = false; };
+  }, [viewMode, setIsAutoFollow, mapType, accuracy, latitude, longitude]);
 
-  // 2. Smoothly Update Driver Marker & Accuracy Circle on GPS Changes
+  // Update 2D Driver Marker Position & Accuracy Circle
   useEffect(() => {
-    if (!googleMapInstanceRef.current || !window.google || !window.google.maps) return;
+    if (viewMode !== "2D" || !map2DInstanceRef.current || !window.google?.maps) return;
 
     const newPos = new window.google.maps.LatLng(latitude, longitude);
 
-    if (driverMarkerRef.current) {
-      driverMarkerRef.current.setPosition(newPos);
+    if (driver2DMarkerRef.current) {
+      driver2DMarkerRef.current.setPosition(newPos);
     }
 
-    if (accuracyCircleRef.current) {
-      accuracyCircleRef.current.setCenter(newPos);
-      if (accuracy) accuracyCircleRef.current.setRadius(accuracy);
+    if (accuracy2DCircleRef.current) {
+      accuracy2DCircleRef.current.setCenter(newPos);
+      if (accuracy) accuracy2DCircleRef.current.setRadius(accuracy);
     }
 
-    // Auto follow if enabled
     if (isAutoFollow) {
-      googleMapInstanceRef.current.panTo(newPos);
+      map2DInstanceRef.current.panTo(newPos);
     }
-  }, [latitude, longitude, accuracy, isAutoFollow]);
+  }, [latitude, longitude, accuracy, isAutoFollow, viewMode]);
 
-  // 3. Recenter map trigger from context
+  // Update 2D Destination Marker & Directions Route
   useEffect(() => {
-    if (recenterTrigger > 0 && googleMapInstanceRef.current && window.google) {
-      const pos = new window.google.maps.LatLng(latitude, longitude);
-      googleMapInstanceRef.current.panTo(pos);
-      googleMapInstanceRef.current.setZoom(16);
-    }
-  }, [recenterTrigger, latitude, longitude]);
+    if (viewMode !== "2D" || !map2DInstanceRef.current || !window.google?.maps) return;
 
-  // 4. Update Destination Marker & Render Route Polyline
-  useEffect(() => {
-    if (!googleMapInstanceRef.current || !window.google || !window.google.maps) return;
-
-    if (destination) {
+    if (destination?.lat && destination?.lng) {
       const destPos = new window.google.maps.LatLng(destination.lat, destination.lng);
-      if (destMarkerRef.current) {
-        destMarkerRef.current.setPosition(destPos);
-        destMarkerRef.current.setTitle(destination.name);
+      if (dest2DMarkerRef.current) {
+        dest2DMarkerRef.current.setPosition(destPos);
+        dest2DMarkerRef.current.setTitle(destination.name);
       } else {
-        destMarkerRef.current = new window.google.maps.Marker({
+        dest2DMarkerRef.current = new window.google.maps.Marker({
           position: destPos,
-          map: googleMapInstanceRef.current,
-          title: destination.name
+          map: map2DInstanceRef.current,
+          title: destination.name,
+          icon: {
+            path: "M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z",
+            fillColor: "#ef4444",
+            fillOpacity: 1,
+            strokeColor: "#ffffff",
+            strokeWeight: 2,
+            scale: 1.4,
+            anchor: new window.google.maps.Point(12, 22)
+          }
         });
       }
     }
 
-    if (directionsRendererRef.current && routeInfo?.directionsResult) {
-      directionsRendererRef.current.setDirections(routeInfo.directionsResult);
+    if (directions2DRendererRef.current && routeInfo?.directionsResult) {
+      directions2DRendererRef.current.setDirections(routeInfo.directionsResult);
+    } else if (routeInfo?.polylinePath && routeInfo.polylinePath.length > 0) {
+      if (routePolyline2DRef.current) {
+        routePolyline2DRef.current.setPath(routeInfo.polylinePath);
+      } else {
+        routePolyline2DRef.current = new window.google.maps.Polyline({
+          path: routeInfo.polylinePath,
+          geodesic: true,
+          strokeColor: "#2563eb",
+          strokeOpacity: 0.9,
+          strokeWeight: 6,
+          map: map2DInstanceRef.current
+        });
+      }
     }
-  }, [destination, routeInfo]);
+  }, [destination, routeInfo, viewMode]);
 
-  // Zoom helpers
+  // Recenter 2D Map Trigger
+  useEffect(() => {
+    if (recenterTrigger > 0 && map2DInstanceRef.current && window.google?.maps) {
+      const pos = new window.google.maps.LatLng(latitude, longitude);
+      map2DInstanceRef.current.panTo(pos);
+      map2DInstanceRef.current.setZoom(16);
+    }
+  }, [recenterTrigger, latitude, longitude]);
+
+  // ----------------------------------------------------
+  // 3. Initialize 3D Google Map (Map3DElement)
+  // ----------------------------------------------------
+  useEffect(() => {
+    if (viewMode !== "3D") return;
+    let isMounted = true;
+
+    loadGoogleLibrary("maps3d")
+      .then((maps3dLib) => {
+        if (!isMounted || !map3DContainerRef.current) return;
+        const { Map3DElement, Marker3DElement, Polyline3DElement } = maps3dLib;
+
+        if (!map3DInstanceRef.current) {
+          map3DContainerRef.current.innerHTML = "";
+
+          const map3d = new Map3DElement({
+            center: { lat: latitude || 28.5355, lng: longitude || 77.3910, altitude: 0 },
+            tilt: 60,
+            heading: heading || 0,
+            range: 650
+          });
+
+          map3DContainerRef.current.appendChild(map3d);
+          map3DInstanceRef.current = map3d;
+
+          // Driver 3D Marker
+          if (Marker3DElement) {
+            const driver3d = new Marker3DElement({
+              position: { lat: latitude || 28.5355, lng: longitude || 77.3910, altitude: 5 },
+              label: "Driver"
+            });
+            map3d.appendChild(driver3d);
+            driver3DMarkerRef.current = driver3d;
+          }
+
+          // Destination 3D Marker
+          if (destination && Marker3DElement) {
+            const dest3d = new Marker3DElement({
+              position: { lat: destination.lat, lng: destination.lng, altitude: 5 },
+              label: destination.name
+            });
+            map3d.appendChild(dest3d);
+            dest3DMarkerRef.current = dest3d;
+          }
+
+          // 3D Route Polyline
+          if (Polyline3DElement && routeInfo?.polylinePath?.length > 0) {
+            const poly3d = new Polyline3DElement({
+              coordinates: routeInfo.polylinePath.map(p => ({ lat: p.lat, lng: p.lng, altitude: 2 })),
+              strokeColor: "#2563eb",
+              strokeWidth: 6
+            });
+            map3d.appendChild(poly3d);
+            routePolyline3DRef.current = poly3d;
+          }
+        } else {
+          map3DInstanceRef.current.center = { lat: latitude || 28.5355, lng: longitude || 77.3910, altitude: 0 };
+        }
+
+        setIs3DSupported(true);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        console.warn("3D Map initialization notice (graceful fallback):", err.message);
+        setIs3DSupported(false);
+        setViewMode("2D");
+      });
+
+    return () => { isMounted = false; };
+  }, [viewMode, destination, heading, latitude, longitude, routeInfo?.polylinePath, setIs3DSupported, setViewMode]);
+
+  // Update 3D Camera & Driver Position
+  useEffect(() => {
+    if (viewMode !== "3D" || !map3DInstanceRef.current) return;
+
+    if (isAutoFollow) {
+      map3DInstanceRef.current.center = { lat: latitude, lng: longitude, altitude: 0 };
+      if (heading !== null && !isNaN(heading)) {
+        map3DInstanceRef.current.heading = heading;
+      }
+    }
+
+    if (driver3DMarkerRef.current) {
+      driver3DMarkerRef.current.position = { lat: latitude, lng: longitude, altitude: 5 };
+    }
+  }, [latitude, longitude, heading, isAutoFollow, viewMode]);
+
+  // Recenter in 3D Mode
+  useEffect(() => {
+    if (recenterTrigger > 0 && viewMode === "3D" && map3DInstanceRef.current) {
+      map3DInstanceRef.current.center = { lat: latitude, lng: longitude, altitude: 0 };
+      map3DInstanceRef.current.tilt = 60;
+      map3DInstanceRef.current.range = 650;
+      if (heading !== null) map3DInstanceRef.current.heading = heading;
+    }
+  }, [recenterTrigger, latitude, longitude, heading, viewMode]);
+
+  // Zoom controls
   const handleZoom = (delta) => {
-    if (googleMapInstanceRef.current) {
-      const curr = googleMapInstanceRef.current.getZoom() || 15;
-      googleMapInstanceRef.current.setZoom(curr + delta);
+    if (viewMode === "2D" && map2DInstanceRef.current) {
+      const curr = map2DInstanceRef.current.getZoom() || 15.5;
+      map2DInstanceRef.current.setZoom(curr + delta);
+    } else if (viewMode === "3D" && map3DInstanceRef.current) {
+      const currentRange = map3DInstanceRef.current.range || 650;
+      map3DInstanceRef.current.range = Math.max(150, Math.min(2500, currentRange - delta * 200));
     }
   };
 
-  // Toggle Map Satellite / Roadmap
+  // Switch Map Layer
   const toggleMapType = () => {
     const next = mapType === "roadmap" ? "hybrid" : "roadmap";
     setMapType(next);
-    if (googleMapInstanceRef.current) {
-      googleMapInstanceRef.current.setMapTypeId(next);
+    if (map2DInstanceRef.current) {
+      map2DInstanceRef.current.setMapTypeId(next);
     }
   };
 
-  // Turn Maneuver Icon Selection
+  // Maneuver icon helper
   const getManeuverIcon = (maneuver) => {
     const m = (maneuver || "").toLowerCase();
     if (m.includes("left")) return CornerUpLeft;
@@ -287,16 +461,9 @@ export default function LiveNavigationCard({ onEndTrip }) {
 
   const ManeuverIcon = getManeuverIcon(routeInfo?.maneuver);
 
-  // Filter destination suggestions
-  const filteredSuggestions = POPULAR_DESTINATIONS.filter(d => 
-    d.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    d.address.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    d.category.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
   return (
     <div className="flex flex-col gap-3.5 h-full relative">
-      {/* 1. Navigation Header & Real GPS Status */}
+      {/* 1. Header with Dynamic GPS Status & 2D/3D Mode Switcher */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-lg bg-blue-100/80 flex items-center justify-center text-blue-600">
@@ -307,12 +474,39 @@ export default function LiveNavigationCard({ onEndTrip }) {
           </div>
         </div>
 
-        {/* Dynamic GPS Status Indicator */}
         <div className="flex items-center gap-2">
+          {/* 2D / 3D Mode Toggle Pill */}
+          <div className="flex items-center p-0.5 rounded-xl bg-slate-100/90 border border-slate-200 shadow-2xs">
+            <button
+              onClick={() => setViewMode("2D")}
+              className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === "2D" ? "bg-white text-blue-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              2D
+            </button>
+            <button
+              onClick={() => {
+                if (!is3DSupported) {
+                  alert("Photorealistic 3D is not supported on this browser context. Reverting to 2D view.");
+                  return;
+                }
+                setViewMode("3D");
+              }}
+              className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                viewMode === "3D" ? "bg-blue-600 text-white shadow-2xs" : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <Box className="w-3 h-3" />
+              <span>3D</span>
+            </button>
+          </div>
+
+          {/* Dynamic GPS Status Indicator */}
           {gpsStatus === "connected" && (
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold shadow-2xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>GPS Connected {accuracy ? `(�${accuracy}m)` : ""}</span>
+              <span>GPS Connected {accuracy ? `(±${accuracy}m)` : ""}</span>
             </div>
           )}
 
@@ -326,7 +520,7 @@ export default function LiveNavigationCard({ onEndTrip }) {
           {gpsStatus === "weak" && (
             <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700 text-[11px] font-bold">
               <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-              <span>Weak GPS (�{accuracy}m)</span>
+              <span>Weak GPS (±{accuracy}m)</span>
             </div>
           )}
 
@@ -339,14 +533,13 @@ export default function LiveNavigationCard({ onEndTrip }) {
         </div>
       </div>
 
-      {/* 2. Destination Search Box */}
+      {/* 2. Destination Search Box (Custom Surakha Places Autocomplete UI) */}
       <div className="relative z-30">
         <div className="relative flex items-center">
           <Search className="absolute left-3.5 w-4 h-4 text-slate-400" />
           <input
-            ref={searchInputRef}
             type="text"
-            placeholder="?? Search destination (e.g., IIT Guwahati, Patna Junction, AIIMS)..."
+            placeholder="🔍 Search destination (e.g. IIT Guwahati, Patna Junction, AIIMS)..."
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
@@ -375,23 +568,19 @@ export default function LiveNavigationCard({ onEndTrip }) {
           )}
         </div>
 
-        {/* Autocomplete / Places Dropdown */}
+        {/* Places Suggestions Dropdown */}
         {isSearchOpen && (
           <div className="absolute top-full left-0 right-0 mt-1.5 p-2 rounded-2xl bg-white/95 backdrop-blur-xl border border-slate-200 shadow-2xl z-40 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
             <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-1 flex items-center justify-between">
-              <span>Quick Destinations & Hubs</span>
-              <span className="text-blue-600">Google Places Ready</span>
+              <span>Google Places & Landmarks</span>
+              <span className="text-blue-600 font-semibold">Live Route Calculation</span>
             </div>
 
             <div className="space-y-1 mt-1">
-              {filteredSuggestions.map((item, idx) => (
+              {placesSuggestions.map((item, idx) => (
                 <div
                   key={idx}
-                  onClick={() => {
-                    selectDestination(item);
-                    setSearchQuery(item.name);
-                    setIsSearchOpen(false);
-                  }}
+                  onClick={() => handleSelectPlace(item)}
                   className="flex items-center justify-between p-2 rounded-xl hover:bg-blue-50/80 text-left transition-colors cursor-pointer"
                 >
                   <div className="flex items-center gap-2.5">
@@ -403,8 +592,8 @@ export default function LiveNavigationCard({ onEndTrip }) {
                       <div className="text-[10px] text-slate-500 line-clamp-1">{item.address}</div>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">
-                    {item.category}
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 shrink-0">
+                    {item.category || "Place"}
                   </span>
                 </div>
               ))}
@@ -413,78 +602,25 @@ export default function LiveNavigationCard({ onEndTrip }) {
         )}
       </div>
 
-      {/* 3. Main Map Viewport */}
+      {/* 3. Main Map Viewport (2D / 3D Canvas) */}
       <div className="relative w-full flex-1 min-h-[380px] lg:min-h-[460px] rounded-3xl overflow-hidden glass-panel border border-white shadow-lg bg-[#f1f5f9]">
-        {/* Real Google Map Container */}
-        <div ref={mapContainerRef} className="absolute inset-0 w-full h-full" />
+        {/* 2D Google Map View */}
+        <div 
+          ref={map2DContainerRef} 
+          className={`absolute inset-0 w-full h-full transition-opacity duration-300 ${
+            viewMode === "2D" ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0"
+          }`} 
+        />
 
-        {/* Fallback Vector Interactive Map (Renders smoothly if Google Maps JS is awaiting key or loading) */}
-        {!isGoogleMapLoaded && (
-          <div className="absolute inset-0 w-full h-full bg-gradient-to-b from-[#f8fafc] to-[#e2e8f0] flex flex-col items-center justify-center">
-            {/* Interactive Simulated Dynamic Route Grid */}
-            <svg className="w-full h-full absolute inset-0" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <pattern id="gridPattern" width="40" height="40" patternUnits="userSpaceOnUse">
-                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#e2e8f0" strokeWidth="0.8" />
-                </pattern>
-                <linearGradient id="routeGradient" x1="0%" y1="100%" x2="0%" y2="0%">
-                  <stop offset="0%" stopColor="#3b82f6" />
-                  <stop offset="100%" stopColor="#2563eb" />
-                </linearGradient>
-              </defs>
-              <rect width="100%" height="100%" fill="#f8fafc" />
-              <rect width="100%" height="100%" fill="url(#gridPattern)" />
+        {/* 3D Google Map View (Map3DElement) */}
+        <div 
+          ref={map3DContainerRef} 
+          className={`absolute inset-0 w-full h-full transition-opacity duration-300 ${
+            viewMode === "3D" ? "opacity-100 z-10" : "opacity-0 pointer-events-none z-0"
+          }`} 
+        />
 
-              {/* Highway Corridor */}
-              <path d="M 120 450 L 320 220 L 500 120" stroke="#f1f5f9" strokeWidth="16" fill="none" />
-              <path d="M 280 480 L 310 320 L 325 180 L 340 60" stroke="#e2e8f0" strokeWidth="22" fill="none" strokeLinecap="round" />
-              <path d="M 280 480 L 310 320 L 325 180 L 340 60" stroke="#fde047" strokeWidth="12" fill="none" strokeLinecap="round" />
-
-              {/* Dynamic Route Polyline */}
-              <path 
-                d="M 305 350 L 310 320 L 325 180 L 340 60" 
-                stroke="url(#routeGradient)" 
-                strokeWidth="7" 
-                fill="none" 
-                strokeLinecap="round"
-                className="drop-shadow-md"
-              />
-
-              {/* Destination Pin */}
-              <g transform="translate(340, 60)">
-                <circle cx="0" cy="0" r="8" fill="#ef4444" stroke="#ffffff" strokeWidth="2" className="drop-shadow-md" />
-                <circle cx="0" cy="0" r="3" fill="#ffffff" />
-              </g>
-
-              {/* Dynamic Driver GPS Position Marker with Heading & Accuracy */}
-              <g transform="translate(305, 350)">
-                <circle cx="0" cy="0" r={accuracy ? Math.min(45, Math.max(20, accuracy)) : 24} fill="#3b82f6" fillOpacity="0.18" className="animate-ping" />
-                <circle cx="0" cy="0" r="14" fill="#ffffff" stroke="#2563eb" strokeWidth="2.5" className="drop-shadow-lg" />
-                {/* Heading Direction Cone */}
-                <path 
-                  d="M 0 -8 L 6 6 L 0 3 L -6 6 Z" 
-                  fill="#2563eb" 
-                  transform={`rotate(${heading || 0})`}
-                />
-              </g>
-            </svg>
-
-            {/* Subtle Info Badge if API Key isn't set yet */}
-            {googleMapError && (
-              <div className="absolute top-20 inset-x-6 z-10 p-2.5 rounded-xl bg-blue-900/80 backdrop-blur-md text-white border border-blue-400/40 text-center shadow-lg animate-in fade-in">
-                <div className="text-xs font-bold flex items-center justify-center gap-1.5">
-                  <Radio className="w-3.5 h-3.5 text-blue-300 animate-pulse" />
-                  Real GPS Active � Lat: {latitude.toFixed(4)}�, Lng: {longitude.toFixed(4)}�
-                </div>
-                <div className="text-[10px] text-blue-200 mt-0.5">
-                  Live tracking active. Add <code className="bg-blue-950 px-1 py-0.5 rounded text-white">VITE_GOOGLE_MAPS_API_KEY</code> in <code className="bg-blue-950 px-1 py-0.5 rounded text-white">.env</code> for Google satellite & street view.
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 4. Top-Left Dynamic Turn-by-Turn Guidance Banner */}
+        {/* Top-Left Dynamic Turn-by-Turn Guidance Banner */}
         <div className="absolute top-4 left-4 z-20 flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-emerald-800/95 text-white shadow-xl backdrop-blur-md border border-emerald-600/40 min-w-[210px] max-w-[320px] animate-in fade-in slide-in-from-top-2">
           <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0 shadow-xs">
             <ManeuverIcon className="w-5 h-5 text-white stroke-[2.5]" />
@@ -499,9 +635,9 @@ export default function LiveNavigationCard({ onEndTrip }) {
           </div>
         </div>
 
-        {/* 5. Floating Map Controls (Right Side) */}
+        {/* Floating Map Controls (Right Side) */}
         <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
-          {/* Mute/Unmute */}
+          {/* Mute/Unmute Voice Guidance */}
           <button
             onClick={() => setVoiceMuted(!voiceMuted)}
             className="p-2.5 rounded-xl bg-white/90 hover:bg-white text-slate-700 shadow-md border border-white backdrop-blur-md transition-all active:scale-95 cursor-pointer"
@@ -510,14 +646,16 @@ export default function LiveNavigationCard({ onEndTrip }) {
             {voiceMuted ? <VolumeX className="w-4 h-4 text-slate-400" /> : <Volume2 className="w-4 h-4 text-slate-700" />}
           </button>
 
-          {/* Map Layer Switcher (Roadmap / Satellite) */}
-          <button
-            onClick={toggleMapType}
-            className="p-2.5 rounded-xl bg-white/90 hover:bg-white text-slate-700 shadow-md border border-white backdrop-blur-md transition-all active:scale-95 cursor-pointer"
-            title={`Switch to ${mapType === "roadmap" ? "Satellite" : "Roadmap"} View`}
-          >
-            <Layers className="w-4 h-4 text-slate-700" />
-          </button>
+          {/* Map Layer Switcher (2D Roadmap / Hybrid Satellite) */}
+          {viewMode === "2D" && (
+            <button
+              onClick={toggleMapType}
+              className="p-2.5 rounded-xl bg-white/90 hover:bg-white text-slate-700 shadow-md border border-white backdrop-blur-md transition-all active:scale-95 cursor-pointer"
+              title={`Switch to ${mapType === "roadmap" ? "Satellite" : "Roadmap"} View`}
+            >
+              <Layers className="w-4 h-4 text-slate-700" />
+            </button>
+          )}
 
           {/* Recenter Driver GPS */}
           <button
@@ -548,7 +686,7 @@ export default function LiveNavigationCard({ onEndTrip }) {
             </button>
           </div>
 
-          {/* Toggle Developer GPS Debug HUD */}
+          {/* Developer GPS Debug Toggle */}
           <button
             onClick={() => setShowDebug(!showDebug)}
             className={`p-2 rounded-xl text-[10px] font-bold shadow-md border border-white backdrop-blur-md transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-1 ${
@@ -561,27 +699,28 @@ export default function LiveNavigationCard({ onEndTrip }) {
           </button>
         </div>
 
-        {/* 6. Collapsible Developer GPS Debug HUD */}
+        {/* Collapsible Developer GPS Debug HUD */}
         {showDebug && (
           <div className="absolute top-20 right-4 z-30 w-64 p-3 rounded-2xl bg-slate-950/90 text-emerald-400 border border-emerald-500/30 shadow-2xl backdrop-blur-xl font-mono text-[10px] space-y-1 animate-in fade-in zoom-in-95">
             <div className="flex items-center justify-between border-b border-emerald-900/60 pb-1 text-slate-300 font-bold uppercase">
               <span>GPS TELEMETRY DEBUG</span>
-              <button onClick={() => setShowDebug(false)} className="text-slate-400 hover:text-white">?</button>
+              <button onClick={() => setShowDebug(false)} className="text-slate-400 hover:text-white">✕</button>
             </div>
-            <div className="flex justify-between"><span>Latitude:</span> <strong className="text-white">{latitude?.toFixed(5)}�</strong></div>
-            <div className="flex justify-between"><span>Longitude:</span> <strong className="text-white">{longitude?.toFixed(5)}�</strong></div>
-            <div className="flex justify-between"><span>Accuracy:</span> <strong className="text-white">�{accuracy || 12} m</strong></div>
-            <div className="flex justify-between"><span>Speed:</span> <strong className="text-white">{speedKmh || 52} km/h</strong></div>
-            <div className="flex justify-between"><span>Heading:</span> <strong className="text-white">{heading !== null ? `${heading}�` : "N/A"}</strong></div>
+            <div className="flex justify-between"><span>Latitude:</span> <strong className="text-white">{latitude?.toFixed(5)}°</strong></div>
+            <div className="flex justify-between"><span>Longitude:</span> <strong className="text-white">{longitude?.toFixed(5)}°</strong></div>
+            <div className="flex justify-between"><span>Accuracy:</span> <strong className="text-white">±{accuracy || 12} m</strong></div>
+            <div className="flex justify-between"><span>Speed:</span> <strong className="text-white">{speedKmh !== null ? `${speedKmh} km/h` : "--"}</strong></div>
+            <div className="flex justify-between"><span>Heading:</span> <strong className="text-white">{heading !== null ? `${heading}°` : "--"}</strong></div>
+            <div className="flex justify-between"><span>Mode:</span> <strong className="text-blue-400">{viewMode} View</strong></div>
             <div className="flex justify-between"><span>GPS State:</span> <strong className="text-emerald-400 uppercase">{gpsStatus}</strong></div>
-            <div className="flex justify-between"><span>Auto-Follow:</span> <strong className={isAutoFollow ? "text-emerald-400" : "text-amber-400"}>{isAutoFollow ? "ON" : "PAUSED"}</strong></div>
+            <div className="flex justify-between"><span>Auto-Follow:</span> <strong className={isAutoFollow ? "text-emerald-400" : "text-amber-400"}>{isAutoFollow ? "ACTIVE" : "PAUSED"}</strong></div>
             <div className="pt-1 border-t border-slate-800 text-[9px] text-slate-400 truncate">
-              Road: {currentRoad}
+              Road: {currentRoad || "NH 44"}
             </div>
           </div>
         )}
 
-        {/* 7. Bottom Trip Telemetry Strip (Dynamic Route, Distance & ETA) */}
+        {/* 4. Bottom Trip Telemetry Strip (Dynamic Route, Distance & ETA) */}
         <div className="absolute bottom-3 inset-x-3 z-20 flex items-center justify-between px-4 py-2.5 rounded-2xl bg-white/95 backdrop-blur-xl border border-white shadow-xl text-slate-800">
           <div className="flex items-center gap-4 sm:gap-8">
             <div>
@@ -607,7 +746,7 @@ export default function LiveNavigationCard({ onEndTrip }) {
                 {currentRoad || "NH 44"}
               </div>
               <div className="text-[10px] sm:text-[11px] font-medium text-slate-500 truncate max-w-[140px]">
-                {destination ? `To: ${destination.name}` : "Current Road"}
+                {destination ? `To: ${destination.name}` : "Current Route"}
               </div>
             </div>
           </div>

@@ -1,9 +1,9 @@
-import React from "react";
-import { X, Bed, Navigation, Coffee, ShieldCheck, ShowerHead, ArrowRight } from "lucide-react";
-import { useLocation } from "../../context/LocationContext";
+﻿import React from "react";
+import { X, Bed, Navigation, Coffee, ShieldCheck, ArrowRight } from "lucide-react";
+import { useNavigation } from "../../context/NavigationContext";
 
 export default function RestAreaModal({ isOpen, onClose, onNavigate }) {
-  const { selectDestination } = useLocation();
+  const { selectDestination } = useNavigation();
 
   if (!isOpen) return null;
 
@@ -12,7 +12,8 @@ export default function RestAreaModal({ isOpen, onClose, onNavigate }) {
       name: "Highway Oasis Driver Rest Complex",
       address: "NH 44, Mile 238 Highway Rest Hub",
       lat: 28.5600,
-      lng: 77.4100
+      lng: 77.4100,
+      category: "Rest Stop"
     });
     if (onNavigate) onNavigate();
     onClose();
@@ -81,4 +82,3 @@ export default function RestAreaModal({ isOpen, onClose, onNavigate }) {
     </div>
   );
 }
-

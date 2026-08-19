@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { X, Shield, Search, BookOpen, AlertCircle, FileText, Calendar } from "lucide-react";
+import { X, Search, BookOpen, FileText, Calendar } from "lucide-react";
 
 export default function TrafficRulesModal({ isOpen, onClose }) {
   const [rules, setRules] = useState([]);

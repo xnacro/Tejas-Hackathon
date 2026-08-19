@@ -1,6 +1,6 @@
-// Surakha AI - Google Maps Platform Loader & Geodesic Navigation Utilities
+﻿// Surakha AI - Modern Google Maps Platform Loader (Maps JS, Places, Routes, Maps3D, Geocoding, Geometry)
 
-let googleMapsPromise = null;
+let bootstrapPromise = null;
 
 export const SURAKHA_MAP_STYLES = [
   {
@@ -59,64 +59,83 @@ export const SURAKHA_MAP_STYLES = [
 ];
 
 /**
- * Dynamically loads the Google Maps JavaScript API with places & geometry libraries.
+ * Initializes the Google Maps modern dynamic bootstrap loader.
  */
-export function loadGoogleMaps(apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY) {
-  if (typeof window === "undefined") return Promise.reject(new Error("Window not defined"));
+export function initGoogleMapsBootstrap(apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || import.meta.env.VITE_GOOGLE_MAP_KEY) {
+  if (typeof window === "undefined") return Promise.reject(new Error("Window is undefined"));
 
-  if (window.google && window.google.maps) {
+  if (window.google?.maps?.importLibrary) {
     return Promise.resolve(window.google.maps);
   }
 
-  if (googleMapsPromise) {
-    return googleMapsPromise;
+  if (bootstrapPromise) {
+    return bootstrapPromise;
   }
 
   if (!apiKey || apiKey.trim() === "" || apiKey === "YOUR_KEY") {
     return Promise.reject(new Error("MISSING_API_KEY"));
   }
 
-  googleMapsPromise = new Promise((resolve, reject) => {
-    // Check if script element is already added
-    const existingScript = document.getElementById("google-maps-script");
-    if (existingScript) {
-      existingScript.addEventListener("load", () => resolve(window.google.maps));
-      existingScript.addEventListener("error", (e) => reject(e));
-      return;
+  bootstrapPromise = new Promise((resolve, reject) => {
+    try {
+      // Official Google Maps dynamic inline bootstrap loader
+      (g => {
+        var h, a, k, p = "The Google Maps JavaScript API", c = "google", l = "importLibrary", q = "__ib__", m = document, b = window;
+        b = b[c] || (b[c] = {});
+        var d = b.maps || (b.maps = {}), r = new Set(), e = new URLSearchParams(), u = () => h || (h = new Promise(async (f, n) => {
+          await (a = m.createElement("script"));
+          e.set("libraries", [...r] + "");
+          for (k in g) e.set(k.replace(/[A-Z]/g, t => "_" + t[0].toLowerCase()), g[k]);
+          e.set("callback", c + ".maps." + q);
+          a.src = `https://maps.${c}apis.com/maps/api/js?` + e;
+          d[q] = f;
+          a.onerror = () => {
+            h = null;
+            bootstrapPromise = null;
+            n(new Error(p + " could not load. Check network or API key restrictions."));
+          };
+          a.nonce = m.querySelector("script[nonce]")?.nonce || "";
+          m.head.append(a);
+        }));
+        d[l] ? console.warn(p + " only loads once.") : d[l] = (f, ...n) => r.add(f) && u().then(() => d[l](f, ...n));
+      })({
+        key: apiKey,
+        v: "weekly"
+      });
+
+      // Eagerly preload standard libraries
+      window.google.maps.importLibrary("maps")
+        .then(() => resolve(window.google.maps))
+        .catch(err => {
+          bootstrapPromise = null;
+          reject(err);
+        });
+    } catch (err) {
+      bootstrapPromise = null;
+      reject(err);
     }
-
-    const script = document.createElement("script");
-    script.id = "google-maps-script";
-    script.type = "text/javascript";
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places,geometry&loading=async`;
-    script.async = true;
-    script.defer = true;
-
-    script.onload = () => {
-      if (window.google && window.google.maps) {
-        resolve(window.google.maps);
-      } else {
-        reject(new Error("Google Maps failed to initialize."));
-      }
-    };
-
-    script.onerror = (err) => {
-      googleMapsPromise = null;
-      reject(new Error("Failed to load Google Maps script. Check network or API key restrictions."));
-    };
-
-    document.head.appendChild(script);
   });
 
-  return googleMapsPromise;
+  return bootstrapPromise;
 }
 
 /**
- * Calculates Haversine geodesic distance in kilometers between two coordinates.
+ * Loads a specific Google Maps library using importLibrary
+ */
+export async function loadGoogleLibrary(libraryName) {
+  await initGoogleMapsBootstrap();
+  if (window.google?.maps?.importLibrary) {
+    return await window.google.maps.importLibrary(libraryName);
+  }
+  throw new Error(`Google Maps importLibrary unavailable for ${libraryName}`);
+}
+
+/**
+ * Helper to compute Haversine distance in kilometers between two coordinates.
  */
 export function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
-  const R = 6371; // Earth's radius in km
+  const R = 6371; // Earth radius in km
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
@@ -130,17 +149,18 @@ export function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Removes HTML tags and format artifacts from turn-by-turn directions strings.
+ * Formats distance in meters or km cleanly (e.g., 450 m or 12.4 km).
  */
-export function sanitizeInstruction(htmlString) {
-  if (!htmlString) return "";
-  const tmp = document.createElement("DIV");
-  tmp.innerHTML = htmlString;
-  return tmp.textContent || tmp.innerText || "";
+export function formatDistance(meters) {
+  if (!meters || isNaN(meters)) return "0 m";
+  if (meters < 1000) {
+    return `${Math.round(meters)} m`;
+  }
+  return `${(meters / 1000).toFixed(1)} km`;
 }
 
 /**
- * Formats a duration in seconds into a human readable string.
+ * Formats duration in seconds into a human readable string (e.g., 14 min or 2h 15m).
  */
 export function formatDuration(seconds) {
   if (!seconds || isNaN(seconds)) return "0 min";
@@ -157,4 +177,48 @@ export function formatDuration(seconds) {
 export function calculateETA(durationSeconds) {
   const etaDate = new Date(Date.now() + (durationSeconds || 0) * 1000);
   return etaDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
+}
+
+/**
+ * Strips HTML formatting tags from navigation step strings.
+ */
+export function sanitizeInstruction(htmlString) {
+  if (!htmlString) return "";
+  const tmp = document.createElement("DIV");
+  tmp.innerHTML = htmlString;
+  return tmp.textContent || tmp.innerText || "";
+}
+
+/**
+ * Decodes an encoded Google polyline string into an array of { lat, lng } objects.
+ */
+export function decodePolyline(encoded) {
+  if (!encoded) return [];
+  const poly = [];
+  let index = 0, len = encoded.length;
+  let lat = 0, lng = 0;
+
+  while (index < len) {
+    let b, shift = 0, result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+    do {
+      b = encoded.charCodeAt(index++) - 63;
+      result |= (b & 0x1f) << shift;
+      shift += 5;
+    } while (b >= 0x20);
+    const dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+    lng += dlng;
+
+    poly.push({ lat: lat / 1e5, lng: lng / 1e5 });
+  }
+  return poly;
 }

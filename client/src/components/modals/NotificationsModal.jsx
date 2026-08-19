@@ -1,5 +1,5 @@
 import React from "react";
-import { X, Bell, CheckCircle2, AlertTriangle, ShieldCheck, Clock } from "lucide-react";
+import { X, Bell } from "lucide-react";
 
 export default function NotificationsModal({ isOpen, onClose, notifications }) {
   if (!isOpen) return null;

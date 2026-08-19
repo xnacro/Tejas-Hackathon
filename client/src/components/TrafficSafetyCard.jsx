@@ -4,8 +4,7 @@ import {
   AlertTriangle, 
   Camera, 
   Route, 
-  TrendingUp, 
-  ExternalLink 
+  TrendingUp 
 } from "lucide-react";
 import { useLocation } from "../context/LocationContext";
 
@@ -16,7 +15,6 @@ export default function TrafficSafetyCard({ telemetry, onReduceSpeed, onOpenRule
     ? coords.speedKmh 
     : (telemetry?.speed || 68);
   const speedLimit = telemetry?.speedLimit || 60;
-  const isOverSpeed = currentSpeed > speedLimit;
   const diff = currentSpeed - speedLimit;
 
 

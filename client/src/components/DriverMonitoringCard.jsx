@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from "react";
+import React, { useRef, useEffect, useState } from "react";
 import { 
   ShieldCheck, 
   Eye, 
@@ -10,11 +10,8 @@ import {
   CameraOff, 
   AlertTriangle,
   Sliders,
-  Sparkles,
   Zap,
   Clock,
-  Activity,
-  CheckCircle2,
   AlertOctagon,
   Timer
 } from "lucide-react";
