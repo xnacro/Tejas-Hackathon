@@ -12,13 +12,13 @@ import { getNearbyServices } from "./placesService.js";
 export function assessDrivingSafety({
   drowsinessScore = 15,
   driverAlertnessState = "ALERT",
-  currentSpeed = 52,
+  currentSpeed = 0,
   speedLimit = 60,
   trafficCondition = "NORMAL",
   trafficDelaySec = 0,
   latitude = 24.9528,
   longitude = 86.1831,
-  roadName = "NH 333 / Jamui Corridor",
+  roadName = "Khargour - Amarath - Manjhway Corridor",
   state = "Bihar",
   vehicleType = "truck",
 } = {}) {

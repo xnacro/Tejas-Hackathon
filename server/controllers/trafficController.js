@@ -12,10 +12,10 @@ import { DriverModel } from "../models/driverModel.js";
 let latestTelemetry = {
   latitude: 24.9528,
   longitude: 86.1831,
-  speed: 52,
+  speed: 0,
   speedLimit: 60,
   heading: 90,
-  road: "Khargour - Amarath Road, Jamui",
+  road: "Khargour - Amarath - Manjhway Road, Jamui",
   state: "Bihar",
   vehicleType: "truck",
   drowsinessScore: 15,
@@ -36,7 +36,7 @@ export const TrafficController = {
       const vehicleType = req.query.vehicleType || latestTelemetry.vehicleType;
       const roadName = req.query.road || latestTelemetry.road;
 
-      const roadInfo = await getRoadIntelligence(lat, lng, vehicleType, speed);
+      const roadInfo = await getRoadIntelligence(lat, lng, vehicleType, speed, roadName);
       const hazards = HazardService.getNearbyHazards(lat, lng, 10);
       const nearestHazard = hazards[0] || null;
       const nearbyServices = getNearbyServices(lat, lng, null, 20);

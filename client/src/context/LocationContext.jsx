@@ -88,8 +88,8 @@ export function LocationProvider({ children }) {
       const { latitude, longitude, accuracy, altitude, speed, heading } = position.coords;
       const timestamp = position.timestamp || Date.now();
 
-      // Convert speed from m/s to km/h
-      const speedKmh = speed !== null && speed >= 0 ? Math.round(speed * 3.6) : null;
+      // Convert speed from m/s to km/h (0 km/h when stationary/standing still)
+      const speedKmh = speed !== null && speed > 0.5 ? Math.round(speed * 3.6) : 0;
 
       setCoords({
         latitude,

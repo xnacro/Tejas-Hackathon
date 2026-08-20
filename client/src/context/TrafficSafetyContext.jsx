@@ -6,12 +6,12 @@ const TrafficSafetyContext = createContext(null);
 
 const DEFAULT_TRAFFIC_STATE = {
   speed: {
-    current: 52,
+    current: 0,
     limit: 60,
-    difference: -8,
+    difference: 0,
     status: "WITHIN_LIMIT",
-    message: "🟢 You are driving safely within the 60 km/h road limit.",
-    source: "MoRTH Gazette Road Data",
+    message: "🟢 Vehicle Stationary / Standstill. Road speed limit: 60 km/h.",
+    source: "MoRTH Gazette Highway Standard (S.O. 1522(E))",
   },
   traffic: {
     status: "NORMAL",
@@ -194,11 +194,19 @@ export function TrafficSafetyProvider({ children }) {
           safetyData = await safetyRes.json();
         }
 
-        // Accurately compute speed evaluation
+        // Accurately compute real speed evaluation
         const currentSpeed = rawSpeed;
         const speedLimit = data.speed?.speedLimit || 60;
-        const diff = currentSpeed - speedLimit;
-        const speedStatus = diff > 15 ? "CRITICAL" : diff > 5 ? "OVER_LIMIT" : diff > 0 ? "NEAR_LIMIT" : "WITHIN_LIMIT";
+        const diff = currentSpeed > 0 ? currentSpeed - speedLimit : 0;
+        const speedStatus = currentSpeed === 0 
+          ? "WITHIN_LIMIT" 
+          : diff > 15 
+            ? "CRITICAL" 
+            : diff > 5 
+              ? "OVER_LIMIT" 
+              : diff > 0 
+                ? "NEAR_LIMIT" 
+                : "WITHIN_LIMIT";
 
         setTrafficData(prev => ({
           ...prev,
@@ -207,10 +215,12 @@ export function TrafficSafetyProvider({ children }) {
             limit: speedLimit,
             difference: diff,
             status: speedStatus,
-            message: speedStatus === "WITHIN_LIMIT" 
-              ? `🟢 You are driving safely within the ${speedLimit} km/h road limit.`
-              : `⚠️ Speed Alert: Driving +${diff} km/h above speed limit (${speedLimit} km/h).`,
-            source: data.speed?.source || "MoRTH Gazette Road Data",
+            message: currentSpeed === 0
+              ? `🟢 Vehicle Stationary / Standstill. Road speed limit: ${speedLimit} km/h.`
+              : speedStatus === "WITHIN_LIMIT" 
+                ? `🟢 You are driving safely within the ${speedLimit} km/h road limit (${Math.abs(currentSpeed - speedLimit)} km/h margin).`
+                : `⚠️ Speed Alert: Driving +${diff} km/h above speed limit (${speedLimit} km/h).`,
+            source: data.speed?.source || "MoRTH Gazette Highway Standard (S.O. 1522(E))",
           },
           traffic: data.traffic || prev.traffic,
           road: data.road || prev.road,
@@ -221,7 +231,7 @@ export function TrafficSafetyProvider({ children }) {
           overallSafety: safetyData.overallSafety !== undefined ? safetyData.overallSafety : prev.overallSafety,
           riskLevel: safetyData.riskLevel || (diff > 5 ? "HIGH" : "SAFE"),
           riskFactors: safetyData.riskFactors || (diff > 5 ? ["SPEED_LIMIT_EXCEEDED"] : []),
-          recommendation: safetyData.recommendation || (diff > 5 ? `⚠️ Reduce speed: You are driving +${diff} km/h above the ${speedLimit} km/h limit.` : "🟢 You are driving safely."),
+          recommendation: safetyData.recommendation || (diff > 5 ? `⚠️ Reduce speed: You are driving +${diff} km/h above the ${speedLimit} km/h limit.` : "🟢 Normal driving condition. Drive attentively."),
           driver: safetyData.driver || prev.driver,
           updatedAt: new Date().toISOString(),
         }));

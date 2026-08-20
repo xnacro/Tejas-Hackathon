@@ -37,10 +37,11 @@ export default function TrafficSafetyCard({ onOpenRules }) {
   const [expandedRuleId, setExpandedRuleId] = useState(null);
 
   const { speed, traffic, nearestHazard, hazards } = trafficData;
-  const currentSpeed = speed?.current !== undefined ? speed.current : 52;
+  const currentSpeed = speed?.current !== undefined ? speed.current : 0;
   const speedLimit = speed?.limit || 60;
-  const diff = currentSpeed - speedLimit;
-  const isOverLimit = diff > 0;
+  const isStationary = currentSpeed === 0;
+  const diff = currentSpeed > 0 ? currentSpeed - speedLimit : 0;
+  const isOverLimit = currentSpeed > 0 && diff > 0;
   const isCriticalSpeed = diff > 15;
   const isCriticalRisk = riskLevel === "CRITICAL";
   const isHighRisk = riskLevel === "HIGH";
@@ -51,7 +52,7 @@ export default function TrafficSafetyCard({ onOpenRules }) {
     return r.state.toLowerCase().includes(selectedStateFilter.toLowerCase());
   });
 
-  const speedPercentage = Math.min(100, Math.round((currentSpeed / 120) * 100));
+  const speedPercentage = isStationary ? 0 : Math.min(100, Math.round((currentSpeed / 120) * 100));
 
   return (
     <div className="flex flex-col gap-3.5 h-full">
@@ -116,6 +117,11 @@ export default function TrafficSafetyCard({ onOpenRules }) {
                   <AlertTriangle className="w-3.5 h-3.5 stroke-[2.5]" />
                   <span>Speed Limit Alert</span>
                 </span>
+              ) : isStationary ? (
+                <span className="flex items-center gap-1 text-xs font-extrabold text-emerald-700">
+                  <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
+                  <span>Vehicle Stationary / Standstill</span>
+                </span>
               ) : (
                 <span className="flex items-center gap-1 text-xs font-extrabold text-emerald-700">
                   <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
@@ -127,13 +133,15 @@ export default function TrafficSafetyCard({ onOpenRules }) {
             <p className="text-[11px] font-medium text-slate-600 leading-snug">
               {isOverLimit ? (
                 <>Driving <strong className="text-rose-600">+{diff} km/h</strong> above posted speed limit ({speedLimit} km/h)</>
+              ) : isStationary ? (
+                <>Vehicle parked or at standstill. Posted road limit: <strong className="text-emerald-700">{speedLimit} km/h</strong></>
               ) : (
-                <>Driving <strong className="text-emerald-700">{Math.abs(diff)} km/h</strong> below posted road limit ({speedLimit} km/h)</>
+                <>Driving <strong className="text-emerald-700">{Math.abs(currentSpeed - speedLimit)} km/h</strong> below road limit ({speedLimit} km/h)</>
               )}
             </p>
 
             <div className="text-[9px] font-semibold text-slate-400 flex items-center gap-1 pt-0.5">
-              <span>Limit Source: MoRTH Gazette Highway Standard</span>
+              <span>Limit Source: MoRTH Gazette Highway Standard (S.O. 1522(E))</span>
             </div>
           </div>
 
@@ -145,7 +153,9 @@ export default function TrafficSafetyCard({ onOpenRules }) {
               <span className="text-lg font-black leading-none">{currentSpeed}</span>
               <span className="text-[8px] font-bold uppercase tracking-wider text-slate-400 mt-0.5">km/h</span>
             </div>
-            <span className="text-[10px] font-bold text-slate-500 mt-1">Limit: {speedLimit} km/h</span>
+            <span className="text-[10px] font-bold text-slate-500 mt-1">
+              {isStationary ? "Status: Standstill" : `Limit: ${speedLimit} km/h`}
+            </span>
           </div>
         </div>
 
@@ -153,14 +163,14 @@ export default function TrafficSafetyCard({ onOpenRules }) {
         <div className="mt-3 space-y-1">
           <div className="w-full h-2.5 rounded-full bg-slate-200/80 overflow-hidden flex">
             <div 
-              style={{ width: `${Math.min(100, (currentSpeed / 100) * 100)}%` }} 
+              style={{ width: `${Math.max(4, Math.min(100, (currentSpeed / 100) * 100))}%` }} 
               className={`h-full rounded-full transition-all duration-500 ${
                 isCriticalSpeed ? "bg-rose-600" : isOverLimit ? "bg-amber-500" : "bg-emerald-500"
               }`}
             />
           </div>
           <div className="flex justify-between text-[9px] font-bold text-slate-400 px-0.5">
-            <span>0</span>
+            <span>0 (Stationary)</span>
             <span className="text-emerald-600 font-bold">Limit ({speedLimit} km/h)</span>
             <span>120 km/h</span>
           </div>
