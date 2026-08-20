@@ -6,7 +6,7 @@ import { configDotenv } from "dotenv";
 import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 
-import trafficRoutes from "./routes/trafficRoutes.js";
+import createTrafficRoutes from "./routes/trafficRoutes.js";
 import createHazardRoutes from "./routes/hazardRoutes.js";
 import serviceRoutes from "./routes/serviceRoutes.js";
 import createDriverRoutes from "./routes/driverRoutes.js";
@@ -46,9 +46,11 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.use("/api/traffic", trafficRoutes);
+app.use("/api/traffic", createTrafficRoutes(io));
+app.use("/api/safety", createTrafficRoutes(io));
 app.use("/api/hazards", createHazardRoutes(io));
 app.use("/api/services", serviceRoutes);
+app.use("/api/places", serviceRoutes);
 app.use("/api/driver", createDriverRoutes(io));
 app.use("/api/vehicle", createDriverRoutes(io));
 app.use("/api/sos", createSosRoutes(io));
