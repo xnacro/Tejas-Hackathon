@@ -1,8 +1,9 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import io from "socket.io-client";
 
 import { LocationProvider } from "./context/LocationContext";
 import { NavigationProvider } from "./context/NavigationContext";
+import { TrafficSafetyProvider } from "./context/TrafficSafetyContext";
 import Header from "./components/Header";
 import CenterNav from "./components/CenterNav";
 import DriverMonitoringCard from "./components/DriverMonitoringCard";
@@ -237,7 +238,9 @@ export default function App() {
   return (
     <LocationProvider>
       <NavigationProvider>
-        <DashboardContent />
+        <TrafficSafetyProvider>
+          <DashboardContent />
+        </TrafficSafetyProvider>
       </NavigationProvider>
     </LocationProvider>
   );

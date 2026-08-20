@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "../context/LocationContext";
 import { useNavigation } from "../context/NavigationContext";
+import { useTrafficSafety } from "../context/TrafficSafetyContext";
 import { 
   loadGoogleLibrary, 
   SURAKHA_MAP_STYLES 
@@ -56,6 +57,9 @@ export default function LiveNavigationCard({ onEndTrip }) {
     setViewMode,
     setIs3DSupported
   } = useNavigation();
+
+  const { trafficData } = useTrafficSafety();
+  const hazardMarkersRef = useRef([]);
 
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -410,6 +414,44 @@ export default function LiveNavigationCard({ onEndTrip }) {
       }
     }
   }, [destination, routeInfo]);
+
+  // Render Nearby Road Hazards on Google Map
+  useEffect(() => {
+    if (!map2DInstanceRef.current || !window.google?.maps) return;
+
+    // Clear previous hazard markers
+    hazardMarkersRef.current.forEach(m => m.setMap(null));
+    hazardMarkersRef.current = [];
+
+    const hazards = trafficData?.hazards || [];
+    hazards.forEach(h => {
+      if (h.coordinates?.lat && h.coordinates?.lng) {
+        const marker = new window.google.maps.Marker({
+          position: { lat: h.coordinates.lat, lng: h.coordinates.lng },
+          map: map2DInstanceRef.current,
+          title: `${h.type}: ${h.title}`,
+          icon: {
+            path: window.google.maps.SymbolPath.CIRCLE,
+            scale: 7,
+            fillColor: h.type === "ACCIDENT" ? "#ef4444" : h.type === "SPEED_CAMERA" ? "#f59e0b" : "#6366f1",
+            fillOpacity: 0.9,
+            strokeColor: "#ffffff",
+            strokeWeight: 2,
+          }
+        });
+
+        const infoWindow = new window.google.maps.InfoWindow({
+          content: `<div style="padding:6px;font-family:sans-serif;color:#1e293b;"><strong style="font-size:12px;">${h.title}</strong><div style="font-size:11px;color:#64748b;margin-top:2px;">${h.distanceText || ""} • ${h.confidence || ""}</div></div>`
+        });
+
+        marker.addListener("click", () => {
+          infoWindow.open(map2DInstanceRef.current, marker);
+        });
+
+        hazardMarkersRef.current.push(marker);
+      }
+    });
+  }, [trafficData?.hazards]);
 
   // Recenter Map Trigger
   useEffect(() => {
