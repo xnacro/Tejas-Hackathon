@@ -1,107 +1,72 @@
 let services = [
   {
-    id: "SRV-01",
-    name: "Indian Oil Swagat Fuel & Rest Complex",
-    type: "Petrol Pump",
-    category: "fuel",
-    distanceKm: 2.4,
-    rating: 4.6,
-    openNow: true,
-    features: ["Diesel High-Flow", "Truck Parking", "Clean Washrooms", "Air Filling"],
-    location: "NH 44, Mile 231",
-    coordinates: { lat: 28.5390, lng: 77.3940 }
-  },
-  {
-    id: "SRV-02",
-    name: "Pahalwan Dhaba & Family Restaurant",
-    type: "Restaurant",
-    category: "food",
-    distanceKm: 1.8,
-    rating: 4.8,
-    openNow: true,
-    features: ["24/7 Food", "Driver Discount", "Tea/Coffee", "Large Parking"],
-    location: "NH 44, Service Road",
-    coordinates: { lat: 28.5330, lng: 77.3880 }
-  },
-  {
-    id: "SRV-03",
-    name: "Highway Oasis Driver Rest Area & Dormitory",
-    type: "Rest Area",
-    category: "rest",
-    distanceKm: 5.6,
-    rating: 4.5,
-    openNow: true,
-    features: ["Beds / Resting Pods", "Security CCTV", "Showers", "Mechanic Shop"],
-    location: "NH 44, Km Marker 238",
-    coordinates: { lat: 28.5600, lng: 77.4100 }
-  },
-  {
-    id: "SRV-04",
-    name: "Apex Trauma & Emergency Hospital",
-    type: "Hospital",
-    category: "medical",
-    distanceKm: 8.2,
-    rating: 4.9,
-    openNow: true,
-    features: ["24/7 Emergency", "ICU / Trauma Unit", "Ambulance Standby"],
-    location: "Sector 62 Highway Junction",
-    coordinates: { lat: 28.5800, lng: 77.4300 }
-  },
-  {
-    id: "SRV-05",
-    name: "Highway Patrol Police Station (NH-44 Unit)",
-    type: "Police Station",
-    category: "police",
-    distanceKm: 6.3,
+    id: "SRV-REP-01",
+    name: "Sri Ram Heavy Vehicle Tyre & Mechanical Workshop",
+    type: "Repair",
+    category: "Repair",
+    distanceKm: 0.7,
     rating: 4.3,
-    openNow: true,
-    features: ["Highway Helpdesk", "Emergency Response", "Challan Assistance"],
-    location: "Toll Plaza North Outpost",
-    coordinates: { lat: 28.5700, lng: 77.4200 }
+    location: "Near Malaypur Railway Overbridge, Jamui",
+    coordinates: { lat: 24.9580, lng: 86.1880 },
+    open: true,
+    contact: "+91 9771 445566"
+  },
+  {
+    id: "SRV-REST-01",
+    name: "Highway Oasis Truck & Driver Rest Plaza",
+    type: "Rest Area",
+    category: "Rest Area",
+    distanceKm: 1.1,
+    rating: 4.5,
+    location: "NH 333 Mile 42, Jamui Bypass",
+    coordinates: { lat: 24.9600, lng: 86.1750 },
+    open: true,
+    contact: "+91 9431 889201"
+  },
+  {
+    id: "SRV-FUEL-01",
+    name: "Indian Oil Swagat Fuel & Rest Hub (Diesel Depot)",
+    type: "Petrol Pump",
+    category: "Petrol Pump",
+    distanceKm: 1.2,
+    rating: 4.6,
+    location: "NH 333 / Malaypur Road, Jamui",
+    coordinates: { lat: 24.9450, lng: 86.1920 },
+    open: true,
+    contact: "+91 9835 110294"
+  },
+  {
+    id: "SRV-POL-01",
+    name: "Highway Patrol Police Station (Jamui Unit)",
+    type: "Police Station",
+    category: "Police",
+    distanceKm: 4.8,
+    rating: 4.2,
+    location: "Court Road, Jamui, Bihar",
+    coordinates: { lat: 24.9250, lng: 86.2200 },
+    open: true,
+    contact: "112 / +91 6345 222233"
+  },
+  {
+    id: "SRV-HOSP-01",
+    name: "Sadar Trauma & Emergency Hospital",
+    type: "Hospital",
+    category: "Hospital",
+    distanceKm: 5.4,
+    rating: 4.4,
+    location: "Station Road, Jamui, Bihar 811307",
+    coordinates: { lat: 24.9214, lng: 86.2251 },
+    open: true,
+    contact: "+91 6345 222102"
   }
 ];
 
-function haversine(lat1, lon1, lat2, lon2) {
-  const R = 6371; // Earth radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return Number((R * c).toFixed(1));
-}
-
 export const NearbyServiceModel = {
-  findAll: (category, userLat, userLng) => {
-    let list = [...services];
-    if (category) {
-      list = list.filter(s => s.category.toLowerCase() === category.toLowerCase());
-    }
-
-    if (userLat !== undefined && userLng !== undefined && !isNaN(userLat) && !isNaN(userLng)) {
-      list = list.map(s => {
-        const dist = haversine(Number(userLat), Number(userLng), s.coordinates.lat, s.coordinates.lng);
-        return {
-          ...s,
-          distanceKm: dist,
-          distance: `${dist} km`
-        };
-      });
-      list.sort((a, b) => a.distanceKm - b.distanceKm);
-    }
-
-    return list;
+  findAll: () => {
+    return services;
   },
-  findById: (id) => {
-    return services.find(s => s.id === id) || null;
-  },
-  findNearestRestArea: (userLat, userLng) => {
-    const restAreas = NearbyServiceModel.findAll("rest", userLat, userLng);
-    return restAreas.length > 0 ? restAreas[0] : services[2];
+  findByCategory: (category) => {
+    if (!category || category === "all") return services;
+    return services.filter(s => s.type.toLowerCase().includes(category.toLowerCase()));
   }
 };
-

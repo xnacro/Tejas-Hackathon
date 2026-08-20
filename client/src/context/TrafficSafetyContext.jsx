@@ -11,7 +11,7 @@ const DEFAULT_TRAFFIC_STATE = {
     difference: -8,
     status: "WITHIN_LIMIT",
     message: "🟢 You are driving safely within the 60 km/h road limit.",
-    source: "Road Data Model",
+    source: "MoRTH Gazette Road Data",
   },
   traffic: {
     status: "NORMAL",
@@ -37,8 +37,8 @@ const DEFAULT_TRAFFIC_STATE = {
   nearestRestArea: {
     id: "SRV-REST-01",
     name: "Highway Oasis Truck & Driver Rest Plaza",
-    distanceText: "1.8 km",
-    distanceKm: 1.8,
+    distanceText: "1.1 km",
+    distanceKm: 1.1,
   },
   applicableRule: {
     offence_name: "Over Speeding (Commercial Heavy / Truck)",
@@ -48,10 +48,10 @@ const DEFAULT_TRAFFIC_STATE = {
     source: "MoRTH Gazette Notification S.O. 1522(E)",
     source_url: "https://morth.nic.in",
   },
-  overallSafety: 94,
+  overallSafety: 95,
   riskLevel: "SAFE",
   riskFactors: [],
-  recommendation: "You are driving safely. Maintain steady speed and safe following distance.",
+  recommendation: "🟢 Normal Driving: Vehicle speed is within safety limits and road condition is clear.",
   driver: {
     drowsinessScore: 15,
     alertnessState: "ALERT",
@@ -68,7 +68,7 @@ const DEMO_SCENARIOS = {
       difference: -8,
       status: "WITHIN_LIMIT",
       message: "🟢 You are driving safely within the 60 km/h road limit.",
-      source: "Road Data Model",
+      source: "MoRTH Gazette Road Data",
     },
     traffic: { status: "NORMAL", delaySeconds: 0, delayText: "0 min delay", congestionIndex: 10 },
     overallSafety: 96,
@@ -84,7 +84,7 @@ const DEMO_SCENARIOS = {
       difference: 14,
       status: "OVER_LIMIT",
       message: "⚠️ Speed Limit Alert: Driving 14 km/h above the posted road limit of 60 km/h.",
-      source: "Road Data Model",
+      source: "MoRTH Gazette Road Data",
     },
     traffic: { status: "NORMAL", delaySeconds: 0, delayText: "0 min delay", congestionIndex: 15 },
     overallSafety: 72,
@@ -95,18 +95,18 @@ const DEMO_SCENARIOS = {
   },
   DROWSY: {
     speed: {
-      current: 58,
+      current: 54,
       limit: 60,
-      difference: -2,
+      difference: -6,
       status: "WITHIN_LIMIT",
       message: "🟢 Speed within limit, but driver fatigue detected.",
-      source: "Road Data Model",
+      source: "MoRTH Gazette Road Data",
     },
     traffic: { status: "NORMAL", delaySeconds: 0, delayText: "0 min delay", congestionIndex: 12 },
     overallSafety: 48,
     riskLevel: "HIGH",
     riskFactors: ["MODERATE_FATIGUE_WARNING"],
-    recommendation: "🟠 Fatigue Alert: Prolonged eye closure detected. Take a break at Highway Oasis Rest Stop (1.8 km ahead).",
+    recommendation: "🟠 Fatigue Alert: Prolonged eye closure detected. Take a break at Highway Oasis Rest Stop (1.1 km ahead).",
     driver: { drowsinessScore: 78, alertnessState: "DROWSY" },
   },
   HAZARD: {
@@ -116,7 +116,7 @@ const DEMO_SCENARIOS = {
       difference: -12,
       status: "WITHIN_LIMIT",
       message: "🟢 Speed safe. Incident reported on route ahead.",
-      source: "Road Data Model",
+      source: "MoRTH Gazette Road Data",
     },
     traffic: { status: "SLOW", delaySeconds: 360, delayText: "+6 min delay", congestionIndex: 45 },
     overallSafety: 68,
@@ -141,7 +141,7 @@ const DEMO_SCENARIOS = {
       difference: 16,
       status: "CRITICAL",
       message: "🔴 CRITICAL: Severe overspeeding combined with driver fatigue.",
-      source: "Road Data Model",
+      source: "MoRTH Gazette Road Data",
     },
     traffic: { status: "HEAVY", delaySeconds: 720, delayText: "+12 min delay", congestionIndex: 78 },
     overallSafety: 28,
@@ -155,33 +155,63 @@ const DEMO_SCENARIOS = {
 export function TrafficSafetyProvider({ children }) {
   const { coords, currentRoad } = useLocation();
   const [trafficData, setTrafficData] = useState(DEFAULT_TRAFFIC_STATE);
-  const [demoMode, setDemoMode] = useState(null); // null (Live) | 'NORMAL' | 'OVERSPEED' | 'DROWSY' | 'HAZARD' | 'CRITICAL'
+  const [allRules, setAllRules] = useState([]);
+  const [allStates, setAllStates] = useState(["Bihar", "Uttar Pradesh", "Delhi NCR", "Maharashtra", "Karnataka", "Assam"]);
+  const [selectedStateFilter, setSelectedStateFilter] = useState("Bihar");
+  const [demoMode, setDemoMode] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const socketRef = useRef(null);
 
+  // Fetch all statutory rules on mount
+  useEffect(() => {
+    fetch("/api/traffic/rules")
+      .then(res => res.json())
+      .then(data => {
+        if (data?.rules) {
+          setAllRules(data.rules);
+          if (data.allStates) setAllStates(["All", ...data.allStates]);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   // Fetch unified safety & traffic status from Node.js backend
   const fetchTrafficStatus = useCallback(async () => {
-    if (demoMode) return; // In demo mode, rely on selected scenario
+    if (demoMode) return;
 
     const lat = coords.latitude || 24.9528;
     const lng = coords.longitude || 86.1831;
-    const speed = coords.speedKmh !== null && coords.speedKmh !== undefined ? coords.speedKmh : 52;
+    const rawSpeed = coords.speedKmh !== null && coords.speedKmh !== undefined ? coords.speedKmh : 52;
 
     try {
-      const res = await fetch(`/api/traffic/current?lat=${lat}&lng=${lng}&speed=${speed}&road=${encodeURIComponent(currentRoad || "Khargour - Amarath Road")}`);
+      const res = await fetch(`/api/traffic/current?lat=${lat}&lng=${lng}&speed=${rawSpeed}&road=${encodeURIComponent(currentRoad || "Khargour - Amarath Road")}`);
       if (res.ok) {
         const data = await res.json();
         
-        // Fetch unified safety engine assessment
         const safetyRes = await fetch("/api/safety/status");
         let safetyData = {};
         if (safetyRes.ok) {
           safetyData = await safetyRes.json();
         }
 
+        // Accurately compute speed evaluation
+        const currentSpeed = rawSpeed;
+        const speedLimit = data.speed?.speedLimit || 60;
+        const diff = currentSpeed - speedLimit;
+        const speedStatus = diff > 15 ? "CRITICAL" : diff > 5 ? "OVER_LIMIT" : diff > 0 ? "NEAR_LIMIT" : "WITHIN_LIMIT";
+
         setTrafficData(prev => ({
           ...prev,
-          speed: data.speed || prev.speed,
+          speed: {
+            current: currentSpeed,
+            limit: speedLimit,
+            difference: diff,
+            status: speedStatus,
+            message: speedStatus === "WITHIN_LIMIT" 
+              ? `🟢 You are driving safely within the ${speedLimit} km/h road limit.`
+              : `⚠️ Speed Alert: Driving +${diff} km/h above speed limit (${speedLimit} km/h).`,
+            source: data.speed?.source || "MoRTH Gazette Road Data",
+          },
           traffic: data.traffic || prev.traffic,
           road: data.road || prev.road,
           hazards: data.hazards || prev.hazards,
@@ -189,23 +219,21 @@ export function TrafficSafetyProvider({ children }) {
           nearestRestArea: safetyData.nearestRestArea || prev.nearestRestArea,
           applicableRule: safetyData.applicableRule || prev.applicableRule,
           overallSafety: safetyData.overallSafety !== undefined ? safetyData.overallSafety : prev.overallSafety,
-          riskLevel: safetyData.riskLevel || prev.riskLevel,
-          riskFactors: safetyData.riskFactors || prev.riskFactors,
-          recommendation: safetyData.recommendation || prev.recommendation,
+          riskLevel: safetyData.riskLevel || (diff > 5 ? "HIGH" : "SAFE"),
+          riskFactors: safetyData.riskFactors || (diff > 5 ? ["SPEED_LIMIT_EXCEEDED"] : []),
+          recommendation: safetyData.recommendation || (diff > 5 ? `⚠️ Reduce speed: You are driving +${diff} km/h above the ${speedLimit} km/h limit.` : "🟢 You are driving safely."),
           driver: safetyData.driver || prev.driver,
           updatedAt: new Date().toISOString(),
         }));
       }
     } catch {
-      // Graceful fallback
+      // Fail silently
     }
   }, [coords.latitude, coords.longitude, coords.speedKmh, currentRoad, demoMode]);
 
-  // Set up WebSocket subscriptions & periodic polling
   useEffect(() => {
     fetchTrafficStatus();
 
-    // Connect Socket.io client
     const socket = io(window.location.origin, {
       transports: ["websocket", "polling"],
       reconnectionAttempts: 5,
@@ -238,8 +266,7 @@ export function TrafficSafetyProvider({ children }) {
       }));
     });
 
-    // Throttled refresh interval (every 8 seconds)
-    const interval = setInterval(fetchTrafficStatus, 8000);
+    const interval = setInterval(fetchTrafficStatus, 6000);
 
     return () => {
       clearInterval(interval);
@@ -247,7 +274,6 @@ export function TrafficSafetyProvider({ children }) {
     };
   }, [fetchTrafficStatus, demoMode]);
 
-  // Handle Demo Mode selection
   const switchDemoMode = (mode) => {
     if (!mode) {
       setDemoMode(null);
@@ -270,7 +296,6 @@ export function TrafficSafetyProvider({ children }) {
     }
   };
 
-  // Trigger manual speed reduction action
   const handleReduceSpeed = useCallback(() => {
     setTrafficData(prev => {
       const targetSpeed = Math.max(30, (prev.speed?.limit || 60) - 5);
@@ -281,7 +306,7 @@ export function TrafficSafetyProvider({ children }) {
           current: targetSpeed,
           difference: targetSpeed - (prev.speed?.limit || 60),
           status: "WITHIN_LIMIT",
-          message: `🟢 Speed reduced to ${targetSpeed} km/h. Within safe road limit.`,
+          message: `🟢 Speed reduced to ${targetSpeed} km/h. Safely within road limit.`,
         },
         overallSafety: Math.min(100, prev.overallSafety + 20),
         riskLevel: "SAFE",
@@ -294,6 +319,10 @@ export function TrafficSafetyProvider({ children }) {
     <TrafficSafetyContext.Provider
       value={{
         trafficData,
+        allRules,
+        allStates,
+        selectedStateFilter,
+        setSelectedStateFilter,
         overallSafety: trafficData.overallSafety,
         riskLevel: trafficData.riskLevel,
         riskFactors: trafficData.riskFactors,
