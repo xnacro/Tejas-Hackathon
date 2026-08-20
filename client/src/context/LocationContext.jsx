@@ -1,14 +1,14 @@
-﻿import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 import { reverseGeocode } from "../utils/geocodingService";
 
 const LocationContext = createContext(null);
 
-// Default fallback reference coordinates (NH 44 Expressway Corridor)
+// Default initial reference coordinates before GPS fix
 const DEFAULT_COORDS = {
-  latitude: 28.5355,
-  longitude: 77.3910,
-  currentRoad: "NH 44 Corridor",
-  formattedAddress: "NH 44 Expressway, Sector 62, Noida, Uttar Pradesh, India"
+  latitude: 24.9528,
+  longitude: 86.1831,
+  currentRoad: "Acquiring GPS Road...",
+  formattedAddress: "Locating via Satellite GPS..."
 };
 
 export function LocationProvider({ children }) {

@@ -12,26 +12,16 @@ import { useLocation } from "./LocationContext";
 
 const NavigationContext = createContext(null);
 
-// Default initial destination
-const DEFAULT_DESTINATION = {
-  name: "Patna Junction",
-  address: "Patna Railway Station, Station Road, Patna, Bihar 800001",
-  lat: 25.6022,
-  lng: 85.1376,
-  category: "Transit Hub"
-};
-
 /**
  * Generates smooth intermediate polyline coordinates between origin and destination.
  */
 function generateRoutePath(lat1, lng1, lat2, lng2) {
   const points = [];
-  const count = 25;
+  const count = 30;
   for (let i = 0; i <= count; i++) {
     const frac = i / count;
     const lat = lat1 + (lat2 - lat1) * frac;
-    // Add realistic subtle road curve
-    const curveOffset = Math.sin(frac * Math.PI) * 0.04;
+    const curveOffset = Math.sin(frac * Math.PI) * 0.035;
     const lng = lng1 + (lng2 - lng1) * frac + curveOffset;
     points.push({ lat, lng });
   }
@@ -42,20 +32,21 @@ export function NavigationProvider({ children }) {
   const { coords } = useLocation();
   const { latitude, longitude } = coords;
 
-  const [destination, setDestination] = useState(DEFAULT_DESTINATION);
+  // No destination by default (Free Driving / Cruise Mode)
+  const [destination, setDestination] = useState(null);
   const [viewMode, setViewMode] = useState("2D"); // '2D' | '3D'
   const [is3DSupported, setIs3DSupported] = useState(true);
 
   const [routeInfo, setRouteInfo] = useState({
-    distanceText: "127.5 km",
-    distanceMeters: 127500,
-    durationText: "2h 19m",
-    durationSeconds: 8340,
-    eta: calculateETA(8340),
-    currentInstruction: "Turn right onto SH 8 / NH 333 toward Patna",
-    nextDistance: "1.2 km",
-    maneuver: "turn-right",
-    status: "ACTIVE",
+    distanceText: "--",
+    distanceMeters: 0,
+    durationText: "--",
+    durationSeconds: 0,
+    eta: "--",
+    currentInstruction: "",
+    nextDistance: "",
+    maneuver: "straight",
+    status: "IDLE", // 'IDLE' when cruising, 'ACTIVE' when navigating to a destination
     steps: [],
     polylinePath: [],
     directionsResult: null,
@@ -69,10 +60,27 @@ export function NavigationProvider({ children }) {
    * Computes a driving route using Google Routes / Directions library or resilient road path geometry.
    */
   const calculateRoute = useCallback(async (targetDest = destination, currentCoords = coords) => {
+    if (!targetDest || !targetDest.lat || !targetDest.lng) {
+      setRouteInfo({
+        distanceText: "--",
+        distanceMeters: 0,
+        durationText: "--",
+        durationSeconds: 0,
+        eta: "--",
+        currentInstruction: "",
+        nextDistance: "",
+        maneuver: "straight",
+        status: "IDLE",
+        steps: [],
+        polylinePath: [],
+        directionsResult: null,
+        errorMessage: null
+      });
+      return;
+    }
+
     const originLat = currentCoords.latitude || 24.9528;
     const originLng = currentCoords.longitude || 86.1831;
-
-    if (!targetDest || !targetDest.lat || !targetDest.lng) return;
 
     const now = Date.now();
     const last = lastRouteCalculationRef.current;
@@ -150,7 +158,7 @@ export function NavigationProvider({ children }) {
               durationText: formatDuration(durationSec),
               durationSeconds: durationSec,
               eta: calculateETA(durationSec),
-              currentInstruction: `Proceed on highway toward ${targetDest.name}`,
+              currentInstruction: `Proceed toward ${targetDest.name}`,
               nextDistance: distKm > 2 ? "1.2 km" : "400 m",
               maneuver: "turn-right",
               status: "ACTIVE",
@@ -194,19 +202,22 @@ export function NavigationProvider({ children }) {
 
   const clearDestination = useCallback(() => {
     setDestination(null);
-    setRouteInfo(prev => ({
-      ...prev,
+    lastRouteCalculationRef.current = { originLat: null, originLng: null, destLat: null, destLng: null, time: 0 };
+    setRouteInfo({
       distanceText: "--",
+      distanceMeters: 0,
       durationText: "--",
+      durationSeconds: 0,
       eta: "--",
-      currentInstruction: "No active destination",
-      nextDistance: "--",
+      currentInstruction: "",
+      nextDistance: "",
       maneuver: "straight",
       status: "IDLE",
       steps: [],
       polylinePath: [],
-      directionsResult: null
-    }));
+      directionsResult: null,
+      errorMessage: null
+    });
   }, []);
 
   useEffect(() => {

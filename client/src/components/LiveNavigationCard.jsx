@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { 
   CornerUpRight, 
   CornerUpLeft,
@@ -613,20 +613,31 @@ export default function LiveNavigationCard({ onEndTrip }) {
           />
         )}
 
-        {/* Top-Left Dynamic Turn-by-Turn Guidance Banner */}
-        <div className="absolute top-4 left-4 z-20 flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-emerald-800/95 text-white shadow-xl backdrop-blur-md border border-emerald-600/40 min-w-[210px] max-w-[320px] animate-in fade-in slide-in-from-top-2">
-          <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0 shadow-xs">
-            <ManeuverIcon className="w-5 h-5 text-white stroke-[2.5]" />
-          </div>
-          <div className="overflow-hidden">
-            <div className="text-sm font-extrabold tracking-tight leading-tight">
-              {routeInfo?.nextDistance || "1.2 km"}
+        {/* Top-Left Banner: Active Turn Guidance (When Navigating) OR Live Road Status (When Cruising) */}
+        {destination ? (
+          <div className="absolute top-4 left-4 z-20 flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-emerald-800/95 text-white shadow-xl backdrop-blur-md border border-emerald-600/40 min-w-[210px] max-w-[320px] animate-in fade-in slide-in-from-top-2">
+            <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0 shadow-xs">
+              <ManeuverIcon className="w-5 h-5 text-white stroke-[2.5]" />
             </div>
-            <div className="text-xs font-semibold text-emerald-100 leading-snug truncate">
-              {routeInfo?.currentInstruction || `Continue toward ${destination?.name || "Destination"}`}
+            <div className="overflow-hidden">
+              <div className="text-sm font-extrabold tracking-tight leading-tight">
+                {routeInfo?.nextDistance || "1.2 km"}
+              </div>
+              <div className="text-xs font-semibold text-emerald-100 leading-snug truncate">
+                {routeInfo?.currentInstruction || `Continue toward ${destination.name}`}
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="absolute top-4 left-4 z-20 flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-slate-900/85 text-white shadow-lg backdrop-blur-md border border-white/20 animate-in fade-in">
+            <div className="w-6 h-6 rounded-lg bg-blue-500/30 flex items-center justify-center text-blue-400">
+              <MapPin className="w-3.5 h-3.5 stroke-[2.5]" />
+            </div>
+            <div className="text-xs font-bold truncate max-w-[220px]">
+              {cleanRoadDisplay}
+            </div>
+          </div>
+        )}
 
         {/* 3D Mode Badge Indicator */}
         {viewMode === "3D" && (
@@ -719,44 +730,80 @@ export default function LiveNavigationCard({ onEndTrip }) {
           </div>
         )}
 
-        {/* 4. Bottom Trip Telemetry Strip (Dynamic Route, Distance & ETA) */}
+        {/* 4. Bottom Trip Telemetry Strip */}
         <div className="absolute bottom-3 inset-x-3 z-20 flex items-center justify-between px-4 py-2.5 rounded-2xl bg-white/95 backdrop-blur-xl border border-white shadow-xl text-slate-800">
-          <div className="flex items-center gap-4 sm:gap-8">
-            <div>
-              <div className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight">
-                {routeInfo?.durationText || "56 min"}
+          {destination ? (
+            <div className="flex items-center gap-4 sm:gap-8">
+              <div>
+                <div className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight">
+                  {routeInfo?.durationText || "--"}
+                </div>
+                <div className="text-[10px] sm:text-[11px] font-medium text-slate-500">
+                  ETA {routeInfo?.eta || "--"}
+                </div>
               </div>
-              <div className="text-[10px] sm:text-[11px] font-medium text-slate-500">
-                ETA {routeInfo?.eta || "11:45 AM"}
+
+              <div className="border-l border-slate-200 pl-3 sm:pl-6">
+                <div className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight">
+                  {routeInfo?.distanceText || "--"}
+                </div>
+                <div className="text-[10px] sm:text-[11px] font-medium text-slate-500">
+                  Distance
+                </div>
+              </div>
+
+              <div className="border-l border-slate-200 pl-3 sm:pl-6 hidden sm:block">
+                <div className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight truncate max-w-[140px]">
+                  {cleanRoadDisplay}
+                </div>
+                <div className="text-[10px] sm:text-[11px] font-medium text-slate-500 truncate max-w-[140px]">
+                  To: {destination.name}
+                </div>
               </div>
             </div>
-
-            <div className="border-l border-slate-200 pl-3 sm:pl-6">
-              <div className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight">
-                {routeInfo?.distanceText || "38 km"}
+          ) : (
+            <div className="flex items-center gap-4 sm:gap-6">
+              <div>
+                <div className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight">
+                  {speedKmh !== null ? `${speedKmh} km/h` : "Cruising"}
+                </div>
+                <div className="text-[10px] sm:text-[11px] font-medium text-slate-500">
+                  Current Speed
+                </div>
               </div>
-              <div className="text-[10px] sm:text-[11px] font-medium text-slate-500">
-                Distance
+
+              <div className="border-l border-slate-200 pl-3 sm:pl-5">
+                <div className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight truncate max-w-[190px]">
+                  {cleanRoadDisplay}
+                </div>
+                <div className="text-[10px] sm:text-[11px] font-medium text-slate-500">
+                  Current Location (GPS)
+                </div>
               </div>
             </div>
+          )}
 
-            <div className="border-l border-slate-200 pl-3 sm:pl-6 hidden sm:block">
-              <div className="text-xs sm:text-sm font-extrabold text-slate-900 leading-tight truncate max-w-[140px]">
-                {cleanRoadDisplay}
-              </div>
-              <div className="text-[10px] sm:text-[11px] font-medium text-slate-500 truncate max-w-[140px]">
-                {destination ? `To: ${destination.name}` : "Current Route"}
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={onEndTrip}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold transition-all active:scale-95 cursor-pointer shrink-0"
-          >
-            <StopCircle className="w-3.5 h-3.5 text-rose-500 stroke-[2.5]" />
-            <span>End Trip</span>
-          </button>
+          {destination ? (
+            <button
+              onClick={() => {
+                clearDestination();
+                setSearchQuery("");
+                if (onEndTrip) onEndTrip();
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold transition-all active:scale-95 cursor-pointer shrink-0"
+            >
+              <StopCircle className="w-3.5 h-3.5 text-rose-500 stroke-[2.5]" />
+              <span>End Trip</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setIsSearchOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-600 border border-blue-200 text-xs font-bold transition-all active:scale-95 cursor-pointer shrink-0"
+            >
+              <Search className="w-3.5 h-3.5 text-blue-600" />
+              <span>Route Destination</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

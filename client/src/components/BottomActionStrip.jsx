@@ -63,7 +63,7 @@ export default function BottomActionStrip({
           <div>
             <div className="text-xs sm:text-sm font-extrabold text-slate-800 leading-tight">Community</div>
             <div className="text-[11px] font-medium text-slate-500">
-              {nearbyDriversCount || 12} drivers nearby on NH 44
+              {nearbyDriversCount || 8} drivers nearby in your area
             </div>
           </div>
         </div>
