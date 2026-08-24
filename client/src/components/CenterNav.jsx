@@ -9,7 +9,8 @@ import {
   Settings, 
   ChevronDown,
   Box,
-  Radar
+  Radar,
+  Scan
 } from "lucide-react";
 import { usePerception } from "../context/PerceptionContext";
 
@@ -19,6 +20,7 @@ export default function CenterNav({ activeTab, setActiveTab, onOpenSos, onOpenTr
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutGrid, onClick: () => { setActiveTab("dashboard"); setCenterViewMode("MAP"); } },
     { id: "lidar", label: "LiDAR 3D", icon: Box, onClick: () => { setActiveTab("lidar"); setCenterViewMode("LIDAR_3D"); } },
+    { id: "road_cv", label: "Road CV", icon: Scan, onClick: () => setActiveTab("road_cv") },
     { id: "monitoring", label: "Driver AI", icon: Video, onClick: () => setActiveTab("monitoring") },
     { id: "navigation", label: "Navigation", icon: MapPin, onClick: () => { setActiveTab("navigation"); setCenterViewMode("MAP"); } },
     { id: "traffic", label: "Traffic", icon: Car, onClick: onOpenTrafficRules },
@@ -26,6 +28,7 @@ export default function CenterNav({ activeTab, setActiveTab, onOpenSos, onOpenTr
     { id: "sos", label: "SOS", icon: BellRing, isDanger: true, onClick: onOpenSos },
     { id: "settings", label: "Settings", icon: Settings },
   ];
+
 
 
 

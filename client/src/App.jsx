@@ -10,7 +10,9 @@ import PerceptionPipelineStatusStrip from "./components/PerceptionPipelineStatus
 import CenterNav from "./components/CenterNav";
 import Lidar3DViewer from "./components/Lidar3DViewer";
 import AdaptivePathRadarCard from "./components/AdaptivePathRadarCard";
+import RoadObjectDetectionCard from "./components/RoadObjectDetectionCard";
 import DriverMonitoringCard from "./components/DriverMonitoringCard";
+
 
 
 import VehicleInfoCard from "./components/VehicleInfoCard";
@@ -179,6 +181,32 @@ function DashboardContent() {
             </div>
           </div>
         </main>
+      ) : activeTab === "road_cv" ? (
+        /* Dedicated Road Computer Vision & Object Tracking View */
+        <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 my-2 items-stretch">
+          <div className="lg:col-span-8 xl:col-span-8 flex flex-col justify-start">
+            <RoadObjectDetectionCard />
+          </div>
+
+          {/* Center Nav Column (1 Col) */}
+          <div className="hidden xl:flex xl:col-span-1 justify-center items-center">
+            <CenterNav
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              onOpenSos={() => setIsSosOpen(true)}
+              onOpenTrafficRules={() => setIsRulesOpen(true)}
+              onOpenCommunity={() => setIsCommunityOpen(true)}
+            />
+          </div>
+
+          <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-3.5 justify-start">
+            <AdaptivePathRadarCard />
+            <div className="grid grid-cols-2 gap-3.5">
+              <VehicleInfoCard telemetry={telemetry} />
+              <TodaySummaryCard summary={telemetry?.todaySummary} />
+            </div>
+          </div>
+        </main>
       ) : activeTab === "monitoring" ? (
         /* Dedicated Driver AI Monitoring & Fatigue Center */
         <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 my-2 items-stretch">
@@ -189,6 +217,7 @@ function DashboardContent() {
               onTriggerRestArea={() => setIsRestAreaOpen(true)}
             />
           </div>
+
 
           {/* Center Nav Column (1 Col) */}
           <div className="hidden xl:flex xl:col-span-1 justify-center items-center">
