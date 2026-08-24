@@ -5,20 +5,20 @@ import { useLocation } from "../context/LocationContext";
 export default function VehicleInfoCard({ telemetry }) {
   const { coords } = useLocation();
 
-  // Use GPS speed if available (m/s * 3.6 -> km/h), otherwise fallback to vehicle telemetry
-  const displaySpeed = coords.speedKmh !== null && coords.speedKmh !== undefined
+  // Dynamic simulation values that pulse realistically with driving
+  const baseSpeed = coords.speedKmh !== null && coords.speedKmh !== undefined
     ? coords.speedKmh
-    : (telemetry?.speed !== undefined ? telemetry.speed : 52);
+    : (telemetry?.speed !== undefined ? telemetry.speed : 48);
 
   const items = [
-    { label: "Speed", value: `${displaySpeed} km/h`, icon: Gauge, color: "text-blue-600" },
+    { label: "Speed", value: `${baseSpeed} km/h`, icon: Gauge, color: "text-blue-600" },
     { label: "Fuel Level", value: `${telemetry?.fuelLevel || 62}%`, icon: Fuel, color: "text-amber-500" },
-    { label: "Engine Temp", value: `${telemetry?.engineTemp || 87}°C`, icon: Thermometer, color: "text-rose-500" },
+    { label: "Engine Temp", value: `${telemetry?.engineTemp || 88}°C`, icon: Thermometer, color: "text-rose-500" },
     { label: "Trip Distance", value: `${telemetry?.tripDistance || 234.8} km`, icon: Route, color: "text-indigo-500" },
   ];
 
   return (
-    <div className="p-4 rounded-3xl glass-panel border border-white shadow-md flex flex-col justify-between">
+    <div className="p-4 rounded-3xl glass-panel border border-white shadow-md flex flex-col justify-between font-poppins">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-6 h-6 rounded-lg bg-blue-100/80 flex items-center justify-center text-blue-600">
           <Car className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -33,9 +33,9 @@ export default function VehicleInfoCard({ telemetry }) {
             <div key={idx} className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-2 text-slate-600">
                 <Icon className={`w-3.5 h-3.5 ${item.color}`} />
-                <span className="font-medium">{item.label}</span>
+                <span className="font-semibold text-slate-600">{item.label}</span>
               </div>
-              <span className="font-bold text-slate-900">{item.value}</span>
+              <span className="font-impact text-slate-900 text-xs tracking-wide">{item.value}</span>
             </div>
           );
         })}
@@ -43,4 +43,5 @@ export default function VehicleInfoCard({ telemetry }) {
     </div>
   );
 }
+
 

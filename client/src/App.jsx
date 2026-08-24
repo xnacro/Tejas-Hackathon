@@ -8,8 +8,10 @@ import { PerceptionProvider } from "./context/PerceptionContext";
 import Header from "./components/Header";
 import PerceptionPipelineStatusStrip from "./components/PerceptionPipelineStatusStrip";
 import CenterNav from "./components/CenterNav";
-import RoadObjectDetectionCard from "./components/RoadObjectDetectionCard";
+import Lidar3DViewer from "./components/Lidar3DViewer";
+import AdaptivePathRadarCard from "./components/AdaptivePathRadarCard";
 import DriverMonitoringCard from "./components/DriverMonitoringCard";
+
 
 import VehicleInfoCard from "./components/VehicleInfoCard";
 import TodaySummaryCard from "./components/TodaySummaryCard";
@@ -146,61 +148,123 @@ function DashboardContent() {
         <PerceptionPipelineStatusStrip />
       </div>
 
-      {/* 2. Main 3-Column Cockpit Grid */}
-      <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 my-2 items-stretch">
-        {/* Left Column: Dual AI Cameras (Road Perception + Driver Face Tracking) + Vehicle Telemetry (4 Cols) */}
-        <div className="lg:col-span-4 flex flex-col gap-3.5 justify-start">
-          {/* 1. Forward Road Perception Camera (AI Vision & Object Tracking) */}
-          <RoadObjectDetectionCard />
-
-          {/* 2. Driver In-Cabin Monitoring Camera (Face AI, Fatigue & Microsleep Alerts) */}
-          <DriverMonitoringCard
-            aiState={aiState}
-            setAiState={setAiState}
-            onTriggerRestArea={() => setIsRestAreaOpen(true)}
-          />
-
-          {/* 3. Vehicle Info & Today's Summary */}
-          <div className="grid grid-cols-2 gap-3.5">
-            <VehicleInfoCard telemetry={telemetry} />
-            <TodaySummaryCard summary={telemetry?.todaySummary} />
+      {/* 2. Main Multi-Page Menu Cockpit Grid */}
+      {activeTab === "lidar" ? (
+        /* Dedicated LiDAR 3D Perception & Path Planning Hub (SIH26037) */
+        <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 my-2 items-stretch">
+          {/* Main Area: Full-Width 3D LiDAR Viewer (8 Cols) */}
+          <div className="lg:col-span-8 xl:col-span-8 flex flex-col justify-between">
+            <div className="relative w-full h-[620px] rounded-3xl overflow-hidden glass-panel border border-white shadow-xl bg-slate-950 flex flex-col">
+              <Lidar3DViewer />
+            </div>
           </div>
-        </div>
 
+          {/* Center Nav Column (1 Col) */}
+          <div className="hidden xl:flex xl:col-span-1 justify-center items-center">
+            <CenterNav
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              onOpenSos={() => setIsSosOpen(true)}
+              onOpenTrafficRules={() => setIsRulesOpen(true)}
+              onOpenCommunity={() => setIsCommunityOpen(true)}
+            />
+          </div>
 
-        {/* Center Nav Column (1 Col on Large Screens) */}
-        <div className="hidden xl:flex xl:col-span-1 justify-center items-center">
-          <CenterNav
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            onOpenSos={() => setIsSosOpen(true)}
-            onOpenTrafficRules={() => setIsRulesOpen(true)}
-            onOpenCommunity={() => setIsCommunityOpen(true)}
-          />
-        </div>
+          {/* Right Column: AI Perception Radar & Vehicle Telemetry (3 Cols) */}
+          <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-3.5 justify-start">
+            <AdaptivePathRadarCard />
+            <div className="grid grid-cols-2 gap-3.5">
+              <VehicleInfoCard telemetry={telemetry} />
+              <TodaySummaryCard summary={telemetry?.todaySummary} />
+            </div>
+          </div>
+        </main>
+      ) : activeTab === "monitoring" ? (
+        /* Dedicated Driver AI Monitoring & Fatigue Center */
+        <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 my-2 items-stretch">
+          <div className="lg:col-span-7 xl:col-span-7 flex flex-col justify-start">
+            <DriverMonitoringCard
+              aiState={aiState}
+              setAiState={setAiState}
+              onTriggerRestArea={() => setIsRestAreaOpen(true)}
+            />
+          </div>
 
-        {/* Center Column: Live Navigation Map / LiDAR 3D Perception View (4-5 Cols) */}
-        <div className="lg:col-span-4 xl:col-span-4 flex flex-col justify-between">
-          <LiveNavigationCard
-            onEndTrip={() => alert("Trip completed. Drive safely with ADAPT-INDIA!")}
-          />
-        </div>
+          {/* Center Nav Column (1 Col) */}
+          <div className="hidden xl:flex xl:col-span-1 justify-center items-center">
+            <CenterNav
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              onOpenSos={() => setIsSosOpen(true)}
+              onOpenTrafficRules={() => setIsRulesOpen(true)}
+              onOpenCommunity={() => setIsCommunityOpen(true)}
+            />
+          </div>
 
-        {/* Right Column: Traffic & Safety + Nearby Services (3-4 Cols) */}
-        <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-3.5 justify-between">
-          <TrafficSafetyCard
-            telemetry={telemetry}
-            onReduceSpeed={handleReduceSpeed}
-            onOpenRules={() => setIsRulesOpen(true)}
-          />
+          <div className="lg:col-span-5 xl:col-span-4 flex flex-col gap-3.5 justify-start">
+            <div className="grid grid-cols-2 gap-3.5">
+              <VehicleInfoCard telemetry={telemetry} />
+              <TodaySummaryCard summary={telemetry?.todaySummary} />
+            </div>
+            <NearbyServicesCard
+              services={services}
+              onSelectService={() => {}}
+              onViewAll={() => setIsRulesOpen(true)}
+            />
+          </div>
+        </main>
+      ) : (
+        /* Main Cockpit Dashboard View */
+        <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 my-2 items-stretch">
+          {/* Left Column: Driver Monitoring + Vehicle Info + Today's Summary (4 Cols) */}
+          <div className="lg:col-span-4 flex flex-col gap-3.5 justify-between">
+            <DriverMonitoringCard
+              aiState={aiState}
+              setAiState={setAiState}
+              onTriggerRestArea={() => setIsRestAreaOpen(true)}
+            />
 
-          <NearbyServicesCard
-            services={services}
-            onSelectService={() => {}}
-            onViewAll={() => setIsRulesOpen(true)}
-          />
-        </div>
-      </main>
+            <div className="grid grid-cols-2 gap-3.5">
+              <VehicleInfoCard telemetry={telemetry} />
+              <TodaySummaryCard summary={telemetry?.todaySummary} />
+            </div>
+          </div>
+
+          {/* Center Nav Column (1 Col on Large Screens) */}
+          <div className="hidden xl:flex xl:col-span-1 justify-center items-center">
+            <CenterNav
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              onOpenSos={() => setIsSosOpen(true)}
+              onOpenTrafficRules={() => setIsRulesOpen(true)}
+              onOpenCommunity={() => setIsCommunityOpen(true)}
+            />
+          </div>
+
+          {/* Center Column: Live Navigation Map (4-5 Cols) */}
+          <div className="lg:col-span-4 xl:col-span-4 flex flex-col justify-between">
+            <LiveNavigationCard
+              onEndTrip={() => alert("Trip completed. Drive safely with ADAPT-INDIA!")}
+            />
+          </div>
+
+          {/* Right Column: Traffic & Safety + Nearby Services (3-4 Cols) */}
+          <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-3.5 justify-between">
+            <TrafficSafetyCard
+              telemetry={telemetry}
+              onReduceSpeed={handleReduceSpeed}
+              onOpenRules={() => setIsRulesOpen(true)}
+            />
+
+            <NearbyServicesCard
+              services={services}
+              onSelectService={() => {}}
+              onViewAll={() => setIsRulesOpen(true)}
+            />
+          </div>
+        </main>
+      )}
+
 
       {/* 3. Bottom Action Strip (SOS Emergency, Share Location, Community) */}
       <BottomActionStrip

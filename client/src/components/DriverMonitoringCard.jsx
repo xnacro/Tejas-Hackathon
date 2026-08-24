@@ -27,16 +27,12 @@ import {
   RIGHT_EYE,
   MOUTH
 } from "../utils/faceMeshDetector";
-import { usePerception } from "../context/PerceptionContext";
-import RoadObjectDetectionView from "./RoadObjectDetectionView";
-
 
 export default function DriverMonitoringCard({ 
   aiState, 
   setAiState, 
   onTriggerRestArea 
 }) {
-  const { cameraPerceptionMode, setCameraPerceptionMode } = usePerception();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -44,7 +40,6 @@ export default function DriverMonitoringCard({
   const analyzerRef = useRef(new TemporalDrowsinessAnalyzer(8.0, 0.23, 0.60, 4.5));
   const hasTriggeredRestAreaRef = useRef(false);
   const lastStateUpdateTimeRef = useRef(0);
-
 
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState(null);
@@ -74,33 +69,43 @@ export default function DriverMonitoringCard({
     }
   }, [earThreshold, marThreshold, closureThresholdSec]);
 
-  // Start webcam
+  // Start webcam with fallback-tolerant constraints
   const startCamera = async () => {
     try {
       setCameraError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-          width: { ideal: 640 }, 
-          height: { ideal: 480 }, 
-          facingMode: "user"
-        },
-        audio: false
-      });
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { 
+            width: { ideal: 640 }, 
+            height: { ideal: 480 }, 
+            facingMode: "user"
+          },
+          audio: false
+        });
+      } catch (e1) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
 
-      if (videoRef.current) {
+      if (videoRef.current && stream) {
         videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = async () => {
-          try {
-            await videoRef.current.play();
-            setCameraActive(true);
-          } catch (playErr) {
-            console.warn("Video play error:", playErr);
-          }
-        };
+        try {
+          await videoRef.current.play();
+          setCameraActive(true);
+        } catch (playErr) {
+          videoRef.current.onloadedmetadata = async () => {
+            try {
+              await videoRef.current.play();
+              setCameraActive(true);
+            } catch (err2) {
+              console.warn("Video play error:", err2);
+            }
+          };
+        }
       }
     } catch (err) {
       console.warn("Camera permission error:", err);
-      setCameraError("Camera access required for real-time face tracking. Please allow camera access.");
+      setCameraError("Camera access required for real-time face tracking. Please allow camera access in browser.");
       setCameraActive(false);
     }
   };
@@ -192,7 +197,6 @@ export default function DriverMonitoringCard({
               // 1. Calculate Geometry
               const leftEar = calculateEAR(landmarks, LEFT_EYE, w, h);
               const rightEar = calculateEAR(landmarks, RIGHT_EYE, w, h);
-              const avgEar = (leftEar + rightEar) / 2.0;
               const mar = calculateMAR(landmarks, MOUTH, w, h);
               const headPose = estimateHeadPose(landmarks, w, h);
 
@@ -206,7 +210,7 @@ export default function DriverMonitoringCard({
                 drawFaceMeshOverlay(canvas, landmarks, analysis);
               }
 
-              // 4. Throttled parent state update (every 120ms or on critical state change) to prevent React depth loops
+              // 4. Throttled parent state update
               const isSignificant = analysis.state === "CRITICAL" || analysis.state === "DROWSY";
               if (now - lastStateUpdateTimeRef.current > 120 || isSignificant) {
                 lastStateUpdateTimeRef.current = now;
@@ -307,46 +311,41 @@ export default function DriverMonitoringCard({
   const closureProgressPct = Math.min(100, Math.round((currentClosureSec / closureThresholdSec) * 100));
 
   return (
-    <div className="flex flex-col gap-3.5 h-full">
+    <div className="flex flex-col gap-3.5 h-full font-poppins">
       {/* Driver Monitoring Card Header */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-lg bg-blue-100/80 flex items-center justify-center text-blue-600">
             <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
           </div>
-          <div>
-            <h2 className="text-sm font-bold text-slate-800 tracking-tight">
-              Driver Monitoring (Face AI & Fatigue)
-            </h2>
-          </div>
+          <h2 className="text-sm font-bold text-slate-800 tracking-tight">Driver Monitoring (AI Vision)</h2>
         </div>
 
-        {/* Controls */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => {
               if (cameraActive) stopCamera();
               else startCamera();
             }}
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
               cameraActive 
                 ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20" 
                 : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20"
             }`}
           >
             {cameraActive ? <Camera className="w-3.5 h-3.5" /> : <CameraOff className="w-3.5 h-3.5" />}
-            <span>{cameraActive ? "Online" : "Start"}</span>
+            <span>{cameraActive ? "Camera Online" : "Start Camera"}</span>
           </button>
 
           <button
             onClick={() => setShowControls(!showControls)}
-            className={`flex items-center gap-1 px-2 py-1 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
               showControls ? "bg-blue-100 text-blue-700" : "bg-slate-100 hover:bg-slate-200 text-slate-600"
             }`}
             title="Adjust Eye Closure Alarm Duration & Settings"
           >
             <Sliders className="w-3.5 h-3.5" />
-            <span>{closureThresholdSec}s</span>
+            <span className="font-mono">{closureThresholdSec}s</span>
           </button>
         </div>
       </div>
@@ -364,8 +363,6 @@ export default function DriverMonitoringCard({
           }`}
         />
 
-
-
         {/* Real-time Facial Mesh Canvas */}
         <canvas
           ref={canvasRef}
@@ -376,12 +373,12 @@ export default function DriverMonitoringCard({
 
         {/* Fallback Overlay when Camera is Stopped */}
         {!cameraActive && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-slate-900/90 backdrop-blur-md">
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-slate-900/90 backdrop-blur-md z-10">
             <div className="w-14 h-14 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 mb-3 animate-pulse">
               <Camera className="w-7 h-7" />
             </div>
-            <h3 className="text-sm font-bold text-white mb-1">Real-Time Face Drowsiness AI</h3>
-            <p className="text-xs text-slate-400 mb-4 max-w-xs leading-relaxed">
+            <h3 className="text-sm font-bold text-white mb-1 font-poppins">Real-Time Face Drowsiness AI</h3>
+            <p className="text-xs text-slate-400 mb-4 max-w-xs leading-relaxed font-poppins">
               {cameraError || "Enable webcam for real-time computer vision tracking of eye blinks, fatigue, and yawning."}
             </p>
             <button
@@ -398,7 +395,7 @@ export default function DriverMonitoringCard({
         <div className="absolute top-3.5 right-3.5 z-20 flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/80 border border-white/20 backdrop-blur-md">
             <span className={`w-2 h-2 rounded-full ${faceDetected ? "bg-emerald-400 animate-ping" : cameraActive ? "bg-amber-400 animate-pulse" : "bg-slate-500"}`}></span>
-            <span className="text-[10px] font-bold text-white tracking-wider">
+            <span className="text-[10px] font-impact text-white tracking-wider">
               {modelLoading 
                 ? "LOADING AI..." 
                 : !cameraActive 
@@ -412,18 +409,18 @@ export default function DriverMonitoringCard({
           {cameraActive && (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-950/80 border border-red-500/30 backdrop-blur-md">
               <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-              <span className="text-[10px] font-bold text-white tracking-wider">LIVE</span>
+              <span className="text-[10px] font-impact text-white tracking-wider">LIVE</span>
             </div>
           )}
         </div>
 
         {/* Floating Real Drowsiness Score HUD (Top-Left) */}
         <div className="absolute top-3.5 left-3.5 z-20 p-3 rounded-2xl glass-hud min-w-[130px] border border-white/20">
-          <div className="text-[11px] font-medium text-slate-300 tracking-tight">Drowsiness Score</div>
-          <div className={`text-2xl sm:text-3xl font-extrabold tracking-tight mt-0.5 ${scoreColor}`}>
+          <div className="text-[11px] font-medium text-slate-300 tracking-tight font-poppins">Drowsiness Score</div>
+          <div className={`text-2xl sm:text-3xl font-impact tracking-tight mt-0.5 ${scoreColor}`}>
             {aiState.drowsinessScore}%
           </div>
-          <div className="text-[11px] font-semibold text-slate-300 uppercase tracking-wide">
+          <div className="text-[11px] font-impact text-slate-300 uppercase tracking-wide">
             {aiState.stateLabel}
           </div>
 
@@ -444,7 +441,7 @@ export default function DriverMonitoringCard({
         {/* Real-Time Eye Closure Countdown / Progress Bar (Shows when eyes are closed) */}
         {cameraActive && currentClosureSec > 0.4 && (
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-30 flex flex-col items-center gap-2 p-3.5 rounded-2xl bg-slate-950/90 border border-red-500/50 shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95">
-            <div className="flex items-center gap-2 text-white font-extrabold text-xs">
+            <div className="flex items-center gap-2 text-white font-extrabold text-xs font-impact tracking-wide">
               <Timer className="w-4 h-4 text-red-400 animate-spin" />
               <span>Eyes Closed: <strong className="text-red-400 text-sm">{currentClosureSec.toFixed(1)}s</strong> / {closureThresholdSec}s</span>
             </div>
@@ -470,9 +467,9 @@ export default function DriverMonitoringCard({
         <div className="absolute bottom-3 inset-x-3 z-20 flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-950/85 border border-white/15 backdrop-blur-md text-[11px] font-medium text-white/90">
           <div className="flex items-center gap-1.5">
             <Eye className="w-3.5 h-3.5 text-blue-400" />
-            <span>Eyes: <strong className={aiState.indicators?.eyes === "Closed" ? "text-red-400" : "text-emerald-400"}>{aiState.indicators?.eyes || "Open"}</strong></span>
+            <span>Eyes: <strong className={aiState.indicators?.eyes === "Closed" ? "text-red-400 font-impact" : "text-emerald-400 font-impact"}>{aiState.indicators?.eyes || "Open"}</strong></span>
             {aiState.metrics?.avgEar !== undefined && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-impact ${
                 aiState.indicators?.eyes === "Closed" ? "bg-red-500/20 text-red-300" : "bg-blue-500/20 text-blue-300"
               }`}>
                 EAR: {aiState.metrics.avgEar}
@@ -481,9 +478,9 @@ export default function DriverMonitoringCard({
           </div>
           <div className="flex items-center gap-1.5">
             <Smile className="w-3.5 h-3.5 text-amber-400" />
-            <span>Yawn: <strong className={aiState.indicators?.yawning === "Yes" ? "text-orange-400" : "text-emerald-400"}>{aiState.indicators?.yawning || "No"}</strong></span>
+            <span>Yawn: <strong className={aiState.indicators?.yawning === "Yes" ? "text-orange-400 font-impact" : "text-emerald-400 font-impact"}>{aiState.indicators?.yawning || "No"}</strong></span>
             {aiState.metrics?.mar !== undefined && (
-              <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono font-bold ${
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-impact ${
                 aiState.indicators?.yawning === "Yes" ? "bg-orange-500/20 text-orange-300" : "bg-amber-500/20 text-amber-300"
               }`}>
                 MAR: {aiState.metrics.mar}
@@ -492,14 +489,12 @@ export default function DriverMonitoringCard({
           </div>
           <div className="flex items-center gap-1.5">
             <UserCheck className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Head: <strong className={aiState.indicators?.headPose !== "Normal" ? "text-amber-400" : "text-emerald-400"}>{aiState.indicators?.headPose || "Normal"}</strong></span>
+            <span>Head: <strong className={aiState.indicators?.headPose !== "Normal" ? "text-amber-400 font-impact" : "text-emerald-400 font-impact"}>{aiState.indicators?.headPose || "Normal"}</strong></span>
           </div>
         </div>
       </div>
 
       {/* Driver Status Banner Under Video */}
-
-
       <div className={`flex items-center justify-between px-4 py-2.5 rounded-2xl border transition-all duration-300 shadow-xs ${statusBg}`}>
         <div className="flex items-center gap-2">
           {isAlert ? (
@@ -533,7 +528,7 @@ export default function DriverMonitoringCard({
             </span>
           </div>
 
-          {/* 1. EYE CLOSURE DURATION THRESHOLD (The User's Desired Setting) */}
+          {/* 1. EYE CLOSURE DURATION THRESHOLD */}
           <div className="p-3 rounded-xl bg-blue-50/70 border border-blue-200/80 space-y-2">
             <div className="flex items-center justify-between text-xs font-bold text-slate-800">
               <span className="flex items-center gap-1.5">

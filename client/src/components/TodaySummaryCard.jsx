@@ -8,7 +8,7 @@ export default function TodaySummaryCard({ summary }) {
   const safetyScore = summary?.safetyScore || 92;
 
   return (
-    <div className="p-4 rounded-3xl glass-panel border border-white shadow-md flex flex-col justify-between">
+    <div className="p-4 rounded-3xl glass-panel border border-white shadow-md flex flex-col justify-between font-poppins">
       <div className="flex items-center gap-2 mb-3">
         <div className="w-6 h-6 rounded-lg bg-blue-100/80 flex items-center justify-center text-blue-600">
           <FileText className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -20,25 +20,25 @@ export default function TodaySummaryCard({ summary }) {
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 text-slate-600">
             <Clock className="w-3.5 h-3.5 text-blue-500" />
-            <span className="font-medium">Driving Time</span>
+            <span className="font-semibold text-slate-600">Driving Time</span>
           </div>
-          <span className="font-bold text-slate-900">{drivingTime}</span>
+          <span className="font-impact text-slate-900 text-xs tracking-wide">{drivingTime}</span>
         </div>
 
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 text-slate-600">
             <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-            <span className="font-medium">Alerts</span>
+            <span className="font-semibold text-slate-600">Alerts</span>
           </div>
-          <span className="font-bold text-slate-900">{alertsCount}</span>
+          <span className="font-impact text-slate-900 text-xs tracking-wide">{alertsCount}</span>
         </div>
 
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-2 text-slate-600">
             <Zap className="w-3.5 h-3.5 text-indigo-500" />
-            <span className="font-medium">Top Speed</span>
+            <span className="font-semibold text-slate-600">Top Speed</span>
           </div>
-          <span className="font-bold text-slate-900">{topSpeed} km/h</span>
+          <span className="font-impact text-slate-900 text-xs tracking-wide">{topSpeed} km/h</span>
         </div>
 
         {/* Safety Score with Progress Bar */}
@@ -48,7 +48,7 @@ export default function TodaySummaryCard({ summary }) {
               <Shield className="w-3.5 h-3.5 text-emerald-500" />
               <span className="font-semibold">Safety Score</span>
             </div>
-            <span className="font-extrabold text-emerald-600">{safetyScore}/100</span>
+            <span className="font-impact text-emerald-600 text-xs tracking-wide">{safetyScore}/100</span>
           </div>
           <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200/60 shadow-inner">
             <div
@@ -60,4 +60,5 @@ export default function TodaySummaryCard({ summary }) {
       </div>
     </div>
   );
+
 }

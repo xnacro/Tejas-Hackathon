@@ -14,23 +14,19 @@ import {
 import { usePerception } from "../context/PerceptionContext";
 
 export default function CenterNav({ activeTab, setActiveTab, onOpenSos, onOpenTrafficRules, onOpenCommunity }) {
-  const { centerViewMode, setCenterViewMode } = usePerception();
+  const { setCenterViewMode } = usePerception();
 
   const navItems = [
-    { id: "dashboard", label: "Dashboard", icon: LayoutGrid },
-    { 
-      id: "lidar", 
-      label: "LiDAR 3D", 
-      icon: Box, 
-      onClick: () => setCenterViewMode(centerViewMode === "LIDAR_3D" ? "MAP" : "LIDAR_3D") 
-    },
-    { id: "monitoring", label: "Monitoring", icon: Video },
-    { id: "navigation", label: "Navigation", icon: MapPin, onClick: () => setCenterViewMode("MAP") },
+    { id: "dashboard", label: "Dashboard", icon: LayoutGrid, onClick: () => { setActiveTab("dashboard"); setCenterViewMode("MAP"); } },
+    { id: "lidar", label: "LiDAR 3D", icon: Box, onClick: () => { setActiveTab("lidar"); setCenterViewMode("LIDAR_3D"); } },
+    { id: "monitoring", label: "Driver AI", icon: Video, onClick: () => setActiveTab("monitoring") },
+    { id: "navigation", label: "Navigation", icon: MapPin, onClick: () => { setActiveTab("navigation"); setCenterViewMode("MAP"); } },
     { id: "traffic", label: "Traffic", icon: Car, onClick: onOpenTrafficRules },
     { id: "community", label: "Community", icon: Users, onClick: onOpenCommunity },
     { id: "sos", label: "SOS", icon: BellRing, isDanger: true, onClick: onOpenSos },
     { id: "settings", label: "Settings", icon: Settings },
   ];
+
 
 
   return (
