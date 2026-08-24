@@ -677,12 +677,13 @@ export default function LiveNavigationCard({ onEndTrip }) {
       {centerViewMode === "LIDAR_3D" ? (
         <Lidar3DViewer />
       ) : (
-        <div className="relative w-full flex-1 min-h-[380px] lg:min-h-[460px] rounded-3xl overflow-hidden glass-panel border border-white shadow-lg bg-[#f1f5f9]">
+        <div className="relative w-full flex-1 min-h-[280px] lg:min-h-[350px] rounded-3xl overflow-hidden glass-panel border border-white shadow-lg bg-[#f1f5f9]">
           {/* Main Google Map View (handles 2D & 3D Perspective smoothly) */}
           <div 
             ref={map2DContainerRef} 
             className="absolute inset-0 w-full h-full z-10" 
           />
+
 
           {/* Optional Native Maps 3D Overlay Container */}
           {is3DNativeActive && (

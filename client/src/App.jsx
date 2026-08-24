@@ -138,7 +138,7 @@ function DashboardContent() {
   };
 
   return (
-    <div className="min-h-screen w-full flex flex-col justify-between p-3 sm:p-5 max-w-[1600px] mx-auto select-none font-sans">
+    <div className="min-h-screen xl:h-screen w-full flex flex-col justify-between p-2.5 sm:p-3.5 max-w-[1680px] mx-auto select-none font-sans">
       {/* 1. Header */}
       <Header
         profile={profile}
@@ -146,20 +146,21 @@ function DashboardContent() {
       />
 
       {/* 1.5 Real-Time Perception Pipeline Status Strip */}
-      <div className="my-1">
+      <div className="my-1 shrink-0">
         <PerceptionPipelineStatusStrip />
       </div>
 
       {/* 2. Main Multi-Page Menu Cockpit Grid */}
       {activeTab === "lidar" ? (
         /* Dedicated LiDAR 3D Perception & Path Planning Hub (SIH26037) */
-        <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 my-2 items-stretch">
+        <main className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 flex-1 my-1 items-stretch">
           {/* Main Area: Full-Width 3D LiDAR Viewer (8 Cols) */}
           <div className="lg:col-span-8 xl:col-span-8 flex flex-col justify-between">
-            <div className="relative w-full h-[620px] rounded-3xl overflow-hidden glass-panel border border-white shadow-xl bg-slate-950 flex flex-col">
+            <div className="relative w-full h-[580px] rounded-3xl overflow-hidden glass-panel border border-white shadow-xl bg-slate-950 flex flex-col">
               <Lidar3DViewer />
             </div>
           </div>
+
 
           {/* Center Nav Column (1 Col) */}
           <div className="hidden xl:flex xl:col-span-1 justify-center items-center">
