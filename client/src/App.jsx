@@ -245,23 +245,23 @@ function DashboardContent() {
         </main>
       ) : (
         /* Main Cockpit Dashboard View */
-        <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 my-2 items-stretch">
+        <main className="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1 min-h-0 my-1 items-stretch">
           {/* Left Column: Driver Monitoring + Vehicle Info + Today's Summary (4 Cols) */}
-          <div className="lg:col-span-4 flex flex-col gap-3.5 justify-between">
+          <div className="lg:col-span-4 flex flex-col gap-2.5 min-h-0 justify-between">
             <DriverMonitoringCard
               aiState={aiState}
               setAiState={setAiState}
               onTriggerRestArea={() => setIsRestAreaOpen(true)}
             />
 
-            <div className="grid grid-cols-2 gap-3.5">
+            <div className="grid grid-cols-2 gap-2.5 shrink-0">
               <VehicleInfoCard telemetry={telemetry} />
               <TodaySummaryCard summary={telemetry?.todaySummary} />
             </div>
           </div>
 
           {/* Center Nav Column (1 Col on Large Screens) */}
-          <div className="hidden xl:flex xl:col-span-1 justify-center items-center">
+          <div className="hidden xl:flex xl:col-span-1 min-h-0 justify-center items-center">
             <CenterNav
               activeTab={activeTab}
               setActiveTab={setActiveTab}
@@ -272,14 +272,14 @@ function DashboardContent() {
           </div>
 
           {/* Center Column: Live Navigation Map (4-5 Cols) */}
-          <div className="lg:col-span-4 xl:col-span-4 flex flex-col justify-between">
+          <div className="lg:col-span-4 xl:col-span-4 min-h-0 flex flex-col justify-between h-full">
             <LiveNavigationCard
               onEndTrip={() => alert("Trip completed. Drive safely with ADAPT-INDIA!")}
             />
           </div>
 
           {/* Right Column: Traffic & Safety + Nearby Services (3-4 Cols) */}
-          <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-3.5 justify-between">
+          <div className="lg:col-span-4 xl:col-span-3 min-h-0 flex flex-col gap-2.5 justify-between">
             <TrafficSafetyCard
               telemetry={telemetry}
               onReduceSpeed={handleReduceSpeed}
@@ -294,6 +294,7 @@ function DashboardContent() {
           </div>
         </main>
       )}
+
 
 
       {/* 3. Bottom Action Strip (SOS Emergency, Share Location, Community) */}
