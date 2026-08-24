@@ -12,6 +12,7 @@ import serviceRoutes from "./routes/serviceRoutes.js";
 import createDriverRoutes from "./routes/driverRoutes.js";
 import createSosRoutes from "./routes/sosRoutes.js";
 import createLocationRoutes from "./routes/locationRoutes.js";
+import createPerceptionRoutes from "./routes/perceptionRoutes.js";
 import { setupSockets } from "./sockets/socketHandler.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -40,8 +41,10 @@ app.use(express.json());
 app.get("/api/health", (req, res) => {
   res.json({
     status: "online",
-    architecture: "MVC",
-    system: "Surakha AI Driver Safety Gateway",
+    architecture: "MVC + Real-Time Perception Stream",
+    system: "ADAPT-INDIA — Adaptive Perception-to-Path Planning (SIH26037)",
+    organization: "MathWorks",
+    team: "Legacy Coderz",
     timestamp: new Date().toISOString()
   });
 });
@@ -56,7 +59,16 @@ app.use("/api/vehicle", createDriverRoutes(io));
 app.use("/api/sos", createSosRoutes(io));
 app.use("/api/location", createLocationRoutes(io));
 
+// ADAPT-INDIA Perception & Path Planning Service APIs
+app.use("/api/perception", createPerceptionRoutes(io));
+app.use("/api/lidar", createPerceptionRoutes(io));
+app.use("/api/tracking", createPerceptionRoutes(io));
+app.use("/api/prediction", createPerceptionRoutes(io));
+app.use("/api/risk", createPerceptionRoutes(io));
+app.use("/api/planning", createPerceptionRoutes(io));
+
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`Surakha Express & Socket.io server running on http://localhost:${PORT}`);
+  console.log(`ADAPT-INDIA Express & Socket.io server running on http://localhost:${PORT}`);
 });
+

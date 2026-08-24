@@ -6,8 +6,8 @@ export default function ShareLocationModal({ isOpen, onClose }) {
     { id: "SHR-1", contact: "Fleet Operations Desk", phone: "+91 98765 43210", active: true, expiresAt: "2h remaining" },
     { id: "SHR-2", contact: "Pooja Kumar (Family)", phone: "+91 98111 22334", active: true, expiresAt: "2h remaining" }
   ]);
-  const [copied, setCopied] = useState(false);
-  const liveUrl = "https://surakha.live/track/trk_9921_rajesh";
+  const liveUrl = "https://adapt-india.live/track/trk_9921_rajesh";
+
 
   useEffect(() => {
     fetch("/api/location/share")

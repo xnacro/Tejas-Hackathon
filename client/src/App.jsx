@@ -4,9 +4,13 @@ import io from "socket.io-client";
 import { LocationProvider } from "./context/LocationContext";
 import { NavigationProvider } from "./context/NavigationContext";
 import { TrafficSafetyProvider } from "./context/TrafficSafetyContext";
+import { PerceptionProvider } from "./context/PerceptionContext";
 import Header from "./components/Header";
+import PerceptionPipelineStatusStrip from "./components/PerceptionPipelineStatusStrip";
 import CenterNav from "./components/CenterNav";
+import RoadObjectDetectionCard from "./components/RoadObjectDetectionCard";
 import DriverMonitoringCard from "./components/DriverMonitoringCard";
+
 import VehicleInfoCard from "./components/VehicleInfoCard";
 import TodaySummaryCard from "./components/TodaySummaryCard";
 import LiveNavigationCard from "./components/LiveNavigationCard";
@@ -137,21 +141,32 @@ function DashboardContent() {
         onOpenNotifications={() => setIsNotificationsOpen(true)}
       />
 
+      {/* 1.5 Real-Time Perception Pipeline Status Strip */}
+      <div className="my-1">
+        <PerceptionPipelineStatusStrip />
+      </div>
+
       {/* 2. Main 3-Column Cockpit Grid */}
-      <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 my-2.5 items-stretch">
-        {/* Left Column: Driver Monitoring + Vehicle Info + Today's Summary (4 Cols) */}
-        <div className="lg:col-span-4 flex flex-col gap-3.5 justify-between">
+      <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 my-2 items-stretch">
+        {/* Left Column: Dual AI Cameras (Road Perception + Driver Face Tracking) + Vehicle Telemetry (4 Cols) */}
+        <div className="lg:col-span-4 flex flex-col gap-3.5 justify-start">
+          {/* 1. Forward Road Perception Camera (AI Vision & Object Tracking) */}
+          <RoadObjectDetectionCard />
+
+          {/* 2. Driver In-Cabin Monitoring Camera (Face AI, Fatigue & Microsleep Alerts) */}
           <DriverMonitoringCard
             aiState={aiState}
             setAiState={setAiState}
             onTriggerRestArea={() => setIsRestAreaOpen(true)}
           />
 
+          {/* 3. Vehicle Info & Today's Summary */}
           <div className="grid grid-cols-2 gap-3.5">
             <VehicleInfoCard telemetry={telemetry} />
             <TodaySummaryCard summary={telemetry?.todaySummary} />
           </div>
         </div>
+
 
         {/* Center Nav Column (1 Col on Large Screens) */}
         <div className="hidden xl:flex xl:col-span-1 justify-center items-center">
@@ -164,10 +179,10 @@ function DashboardContent() {
           />
         </div>
 
-        {/* Center Column: Live Navigation Map (4-5 Cols) */}
+        {/* Center Column: Live Navigation Map / LiDAR 3D Perception View (4-5 Cols) */}
         <div className="lg:col-span-4 xl:col-span-4 flex flex-col justify-between">
           <LiveNavigationCard
-            onEndTrip={() => alert("Trip completed. Drive safely with Surakha AI!")}
+            onEndTrip={() => alert("Trip completed. Drive safely with ADAPT-INDIA!")}
           />
         </div>
 
@@ -239,9 +254,12 @@ export default function App() {
     <LocationProvider>
       <NavigationProvider>
         <TrafficSafetyProvider>
-          <DashboardContent />
+          <PerceptionProvider>
+            <DashboardContent />
+          </PerceptionProvider>
         </TrafficSafetyProvider>
       </NavigationProvider>
     </LocationProvider>
   );
 }
+

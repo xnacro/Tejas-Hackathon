@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { useLocation } from "../context/LocationContext";
 import { useTrafficSafety } from "../context/TrafficSafetyContext";
+import AdaptivePathRadarCard from "./AdaptivePathRadarCard";
+
 
 export default function TrafficSafetyCard({ onOpenRules }) {
   const { currentRoad } = useLocation();
@@ -103,7 +105,11 @@ export default function TrafficSafetyCard({ onOpenRules }) {
         </div>
       )}
 
+      {/* 2.5 AI Perception & Path Planning Radar Card */}
+      <AdaptivePathRadarCard />
+
       {/* 3. High-Tech Speed Telemetry & Limit Cockpit */}
+
       <div className={`p-4 rounded-3xl border shadow-sm backdrop-blur-md transition-all ${
         isOverLimit
           ? "bg-gradient-to-br from-rose-50/95 via-white/95 to-rose-50/80 border-rose-200/90 shadow-rose-500/10"

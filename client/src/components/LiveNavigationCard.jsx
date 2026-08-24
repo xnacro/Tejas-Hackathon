@@ -26,6 +26,9 @@ import {
   loadGoogleLibrary, 
   SURAKHA_MAP_STYLES 
 } from "../utils/googleMapsLoader";
+import { usePerception } from "../context/PerceptionContext";
+import Lidar3DViewer from "./Lidar3DViewer";
+
 
 const POPULAR_DESTINATIONS = [
   { name: "Patna Junction", address: "Patna Railway Station, Bihar 800001", lat: 25.6022, lng: 85.1376, category: "Transit" },
@@ -58,8 +61,18 @@ export default function LiveNavigationCard({ onEndTrip }) {
     setIs3DSupported
   } = useNavigation();
 
+  const {
+    centerViewMode,
+    setCenterViewMode,
+    showMapPerceptionOverlay,
+    setShowMapPerceptionOverlay,
+    objects,
+    pathPlan
+  } = usePerception();
+
   const { trafficData } = useTrafficSafety();
   const hazardMarkersRef = useRef([]);
+
 
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -506,154 +519,201 @@ export default function LiveNavigationCard({ onEndTrip }) {
 
   return (
     <div className="flex flex-col gap-3.5 h-full relative">
-      {/* 1. Header with Dynamic GPS Status & 2D/3D Mode Switcher */}
-      <div className="flex items-center justify-between px-1">
+      {/* 1. Header with View Mode Switcher & AI Perception Overlay Toggle */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-lg bg-blue-100/80 flex items-center justify-center text-blue-600">
             <MapPin className="w-4 h-4 stroke-[2.5]" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-800 tracking-tight">Live Navigation</h2>
+            <h2 className="text-sm font-bold text-slate-800 tracking-tight">
+              {centerViewMode === "LIDAR_3D" ? "LiDAR 3D Perception" : "Live Navigation"}
+            </h2>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* 2D / 3D Mode Toggle Pill */}
-          <div className="flex items-center p-0.5 rounded-xl bg-slate-100/90 border border-slate-200 shadow-2xs">
+        <div className="flex items-center gap-1.5">
+          {/* Main View Mode Selector: Map vs LiDAR 3D */}
+          <div className="flex items-center p-0.5 rounded-xl bg-slate-100 border border-slate-200 shadow-2xs">
             <button
-              onClick={() => setViewMode("2D")}
-              className={`px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                viewMode === "2D" ? "bg-white text-blue-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
+              onClick={() => setCenterViewMode("MAP")}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                centerViewMode === "MAP" ? "bg-blue-600 text-white shadow-2xs" : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              2D
+              Map
             </button>
             <button
-              onClick={() => setViewMode("3D")}
-              className={`flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                viewMode === "3D" ? "bg-blue-600 text-white shadow-2xs" : "text-slate-500 hover:text-slate-800"
+              onClick={() => setCenterViewMode("LIDAR_3D")}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                centerViewMode === "LIDAR_3D" ? "bg-blue-600 text-white shadow-2xs" : "text-slate-600 hover:text-slate-900"
               }`}
             >
               <Box className="w-3 h-3" />
-              <span>3D</span>
+              <span>LiDAR 3D</span>
             </button>
           </div>
+
+          {centerViewMode === "MAP" && (
+            <>
+              {/* 2D / 3D Mode Toggle Pill for Map */}
+              <div className="flex items-center p-0.5 rounded-xl bg-slate-100/90 border border-slate-200 shadow-2xs">
+                <button
+                  onClick={() => setViewMode("2D")}
+                  className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    viewMode === "2D" ? "bg-white text-blue-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  2D
+                </button>
+                <button
+                  onClick={() => setViewMode("3D")}
+                  className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    viewMode === "3D" ? "bg-white text-blue-600 shadow-2xs" : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  3D
+                </button>
+              </div>
+
+              {/* AI Perception Map Overlay Toggle */}
+              <button
+                onClick={() => setShowMapPerceptionOverlay(!showMapPerceptionOverlay)}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+                  showMapPerceptionOverlay
+                    ? "bg-purple-600 text-white shadow-purple-500/20"
+                    : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+                title="Toggle Autonomous Perception HUD Overlay on Map"
+              >
+                <Activity className="w-3 h-3" />
+                <span>AI Perception</span>
+              </button>
+            </>
+          )}
 
           {/* Dynamic GPS Status Indicator */}
           {gpsStatus === "connected" && (
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold shadow-2xs">
+            <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-bold shadow-2xs">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>GPS Connected {accuracy ? `(±${accuracy}m)` : ""}</span>
-            </div>
-          )}
-
-          {gpsStatus === "searching" && (
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-bold">
-              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
-              <span>Searching for GPS...</span>
-            </div>
-          )}
-
-          {gpsStatus === "weak" && (
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-orange-50 border border-orange-200 text-orange-700 text-[11px] font-bold">
-              <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-              <span>Weak GPS (±{accuracy}m)</span>
-            </div>
-          )}
-
-          {(gpsStatus === "denied" || gpsStatus === "error" || gpsStatus === "unsupported") && (
-            <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-bold">
-              <AlertCircle className="w-3 h-3 text-rose-600" />
-              <span>{gpsStatusMessage}</span>
+              <span>GPS Active</span>
             </div>
           )}
         </div>
       </div>
 
-      {/* 2. Destination Search Box (Custom Surakha Places Autocomplete UI) */}
-      <div className="relative z-30">
-        <div className="relative flex items-center">
-          <Search className="absolute left-3.5 w-4 h-4 text-slate-400" />
-          <input
-            type="text"
-            placeholder="🔍 Search destination (e.g. IIT Guwahati, Patna Junction, AIIMS)..."
-            value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setIsSearchOpen(true);
-            }}
-            onFocus={() => setIsSearchOpen(true)}
-            className="w-full pl-10 pr-10 py-2 rounded-2xl bg-white/90 border border-slate-200/90 shadow-sm text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 backdrop-blur-md transition-all"
-          />
-          {searchQuery ? (
-            <button 
-              onClick={() => {
-                setSearchQuery("");
-                setIsSearchOpen(false);
+      {/* 2. Destination Search Box (Shown in Map Mode) */}
+      {centerViewMode === "MAP" && (
+        <div className="relative z-30">
+          <div className="relative flex items-center">
+            <Search className="absolute left-3.5 w-4 h-4 text-slate-400" />
+            <input
+              type="text"
+              placeholder="🔍 Search destination (e.g. IIT Guwahati, Patna Junction, AIIMS)..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setIsSearchOpen(true);
               }}
-              className="absolute right-3 p-1 rounded-full hover:bg-slate-100 text-slate-400 cursor-pointer"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <button
-              onClick={() => setIsSearchOpen(!isSearchOpen)}
-              className="absolute right-3 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
-            >
-              Places
-            </button>
+              onFocus={() => setIsSearchOpen(true)}
+              className="w-full pl-10 pr-10 py-2 rounded-2xl bg-white/90 border border-slate-200/90 shadow-sm text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 backdrop-blur-md transition-all"
+            />
+            {searchQuery ? (
+              <button 
+                onClick={() => {
+                  setSearchQuery("");
+                  setIsSearchOpen(false);
+                }}
+                className="absolute right-3 p-1 rounded-full hover:bg-slate-100 text-slate-400 cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsSearchOpen(!isSearchOpen)}
+                className="absolute right-3 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+              >
+                Places
+              </button>
+            )}
+          </div>
+
+          {/* Places Suggestions Dropdown */}
+          {isSearchOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1.5 p-2 rounded-2xl bg-white/95 backdrop-blur-xl border border-slate-200 shadow-2xl z-40 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
+              <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-1 flex items-center justify-between">
+                <span>Google Places & Landmarks</span>
+                <span className="text-blue-600 font-semibold">Live Route Calculation</span>
+              </div>
+
+              <div className="space-y-1 mt-1">
+                {placesSuggestions.map((item, idx) => (
+                  <div
+                    key={idx}
+                    onClick={() => handleSelectPlace(item)}
+                    className="flex items-center justify-between p-2 rounded-xl hover:bg-blue-50/80 text-left transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-7 h-7 rounded-lg bg-blue-100/70 flex items-center justify-center text-blue-600 shrink-0">
+                        <MapPin className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-slate-800">{item.name}</div>
+                        <div className="text-[10px] text-slate-500 line-clamp-1">{item.address}</div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 shrink-0">
+                      {item.category || "Place"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
+      )}
 
-        {/* Places Suggestions Dropdown */}
-        {isSearchOpen && (
-          <div className="absolute top-full left-0 right-0 mt-1.5 p-2 rounded-2xl bg-white/95 backdrop-blur-xl border border-slate-200 shadow-2xl z-40 max-h-60 overflow-y-auto animate-in fade-in zoom-in-95 duration-100">
-            <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2 py-1 flex items-center justify-between">
-              <span>Google Places & Landmarks</span>
-              <span className="text-blue-600 font-semibold">Live Route Calculation</span>
-            </div>
-
-            <div className="space-y-1 mt-1">
-              {placesSuggestions.map((item, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => handleSelectPlace(item)}
-                  className="flex items-center justify-between p-2 rounded-xl hover:bg-blue-50/80 text-left transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-7 h-7 rounded-lg bg-blue-100/70 flex items-center justify-center text-blue-600 shrink-0">
-                      <MapPin className="w-3.5 h-3.5" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-slate-800">{item.name}</div>
-                      <div className="text-[10px] text-slate-500 line-clamp-1">{item.address}</div>
-                    </div>
-                  </div>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 shrink-0">
-                    {item.category || "Place"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 3. Main Map Viewport (2D / 3D Perspective Canvas) */}
-      <div className="relative w-full flex-1 min-h-[380px] lg:min-h-[460px] rounded-3xl overflow-hidden glass-panel border border-white shadow-lg bg-[#f1f5f9]">
-        {/* Main Google Map View (handles 2D & 3D Perspective smoothly) */}
-        <div 
-          ref={map2DContainerRef} 
-          className="absolute inset-0 w-full h-full z-10" 
-        />
-
-        {/* Optional Native Maps 3D Overlay Container */}
-        {is3DNativeActive && (
+      {/* 3. Main Viewport: Either LiDAR 3D Perception View OR Google Map View */}
+      {centerViewMode === "LIDAR_3D" ? (
+        <Lidar3DViewer />
+      ) : (
+        <div className="relative w-full flex-1 min-h-[380px] lg:min-h-[460px] rounded-3xl overflow-hidden glass-panel border border-white shadow-lg bg-[#f1f5f9]">
+          {/* Main Google Map View (handles 2D & 3D Perspective smoothly) */}
           <div 
-            ref={map3DContainerRef} 
-            className="absolute inset-0 w-full h-full z-15" 
+            ref={map2DContainerRef} 
+            className="absolute inset-0 w-full h-full z-10" 
           />
-        )}
+
+          {/* Optional Native Maps 3D Overlay Container */}
+          {is3DNativeActive && (
+            <div 
+              ref={map3DContainerRef} 
+              className="absolute inset-0 w-full h-full z-15" 
+            />
+          )}
+
+          {/* Autonomous Perception HUD Overlay on Map (When Toggled) */}
+          {showMapPerceptionOverlay && (
+            <div className="absolute inset-0 z-20 pointer-events-none p-4 flex flex-col justify-between">
+              {/* Top AI Perception Floating Badge */}
+              <div className="self-center px-3.5 py-1.5 rounded-full bg-slate-900/90 border border-purple-500/40 text-white text-xs font-black shadow-xl backdrop-blur-md flex items-center gap-2 pointer-events-auto">
+                <Activity className="w-3.5 h-3.5 text-purple-400 animate-pulse" />
+                <span>AI PERCEPTION OVERLAY ACTIVE</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/20 text-purple-300">
+                  {objects.length} Objects Tracked
+                </span>
+              </div>
+
+              {/* Dynamic Path Planning Replanning Alert Overlay */}
+              {pathPlan && pathPlan.status === "REPLANNING" && (
+                <div className="self-center px-4 py-2 rounded-2xl bg-rose-600 text-white text-xs font-black shadow-2xl backdrop-blur-md border border-rose-400 flex items-center gap-2 animate-bounce pointer-events-auto">
+                  <AlertCircle className="w-4 h-4 text-white" />
+                  <span>Adaptive Avoidance Active (+1.35m Swerve around Pedestrian #03)</span>
+                </div>
+              )}
+            </div>
+          )}
+
 
         {/* Top-Left Banner: Active Turn Guidance (When Navigating) OR Live Road Status (When Cruising) */}
         {destination ? (
@@ -848,6 +908,9 @@ export default function LiveNavigationCard({ onEndTrip }) {
           )}
         </div>
       </div>
+      )}
+
     </div>
   );
 }
+

@@ -7,19 +7,31 @@ import {
   Users, 
   BellRing, 
   Settings, 
-  ChevronDown 
+  ChevronDown,
+  Box,
+  Radar
 } from "lucide-react";
+import { usePerception } from "../context/PerceptionContext";
 
 export default function CenterNav({ activeTab, setActiveTab, onOpenSos, onOpenTrafficRules, onOpenCommunity }) {
+  const { centerViewMode, setCenterViewMode } = usePerception();
+
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: LayoutGrid },
+    { 
+      id: "lidar", 
+      label: "LiDAR 3D", 
+      icon: Box, 
+      onClick: () => setCenterViewMode(centerViewMode === "LIDAR_3D" ? "MAP" : "LIDAR_3D") 
+    },
     { id: "monitoring", label: "Monitoring", icon: Video },
-    { id: "navigation", label: "Navigation", icon: MapPin },
+    { id: "navigation", label: "Navigation", icon: MapPin, onClick: () => setCenterViewMode("MAP") },
     { id: "traffic", label: "Traffic", icon: Car, onClick: onOpenTrafficRules },
     { id: "community", label: "Community", icon: Users, onClick: onOpenCommunity },
     { id: "sos", label: "SOS", icon: BellRing, isDanger: true, onClick: onOpenSos },
     { id: "settings", label: "Settings", icon: Settings },
   ];
+
 
   return (
     <nav className="flex flex-col items-center justify-between py-4 px-2.5 rounded-3xl glass-nav-pill h-full shadow-lg">

@@ -27,12 +27,16 @@ import {
   RIGHT_EYE,
   MOUTH
 } from "../utils/faceMeshDetector";
+import { usePerception } from "../context/PerceptionContext";
+import RoadObjectDetectionView from "./RoadObjectDetectionView";
+
 
 export default function DriverMonitoringCard({ 
   aiState, 
   setAiState, 
   onTriggerRestArea 
 }) {
+  const { cameraPerceptionMode, setCameraPerceptionMode } = usePerception();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -40,6 +44,7 @@ export default function DriverMonitoringCard({
   const analyzerRef = useRef(new TemporalDrowsinessAnalyzer(8.0, 0.23, 0.60, 4.5));
   const hasTriggeredRestAreaRef = useRef(false);
   const lastStateUpdateTimeRef = useRef(0);
+
 
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState(null);
@@ -309,34 +314,39 @@ export default function DriverMonitoringCard({
           <div className="w-6 h-6 rounded-lg bg-blue-100/80 flex items-center justify-center text-blue-600">
             <ShieldCheck className="w-4 h-4 stroke-[2.5]" />
           </div>
-          <h2 className="text-sm font-bold text-slate-800 tracking-tight">Driver Monitoring (AI Vision)</h2>
+          <div>
+            <h2 className="text-sm font-bold text-slate-800 tracking-tight">
+              Driver Monitoring (Face AI & Fatigue)
+            </h2>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        {/* Controls */}
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => {
               if (cameraActive) stopCamera();
               else startCamera();
             }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer ${
               cameraActive 
                 ? "bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-500/20" 
                 : "bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/20"
             }`}
           >
             {cameraActive ? <Camera className="w-3.5 h-3.5" /> : <CameraOff className="w-3.5 h-3.5" />}
-            <span>{cameraActive ? "Camera Online" : "Start Camera"}</span>
+            <span>{cameraActive ? "Online" : "Start"}</span>
           </button>
 
           <button
             onClick={() => setShowControls(!showControls)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
+            className={`flex items-center gap-1 px-2 py-1 rounded-xl text-xs font-semibold transition-colors cursor-pointer ${
               showControls ? "bg-blue-100 text-blue-700" : "bg-slate-100 hover:bg-slate-200 text-slate-600"
             }`}
             title="Adjust Eye Closure Alarm Duration & Settings"
           >
             <Sliders className="w-3.5 h-3.5" />
-            <span>Settings ({closureThresholdSec}s)</span>
+            <span>{closureThresholdSec}s</span>
           </button>
         </div>
       </div>
@@ -353,6 +363,8 @@ export default function DriverMonitoringCard({
             cameraActive ? "opacity-100" : "opacity-0 absolute inset-0 pointer-events-none"
           }`}
         />
+
+
 
         {/* Real-time Facial Mesh Canvas */}
         <canvas
@@ -486,6 +498,8 @@ export default function DriverMonitoringCard({
       </div>
 
       {/* Driver Status Banner Under Video */}
+
+
       <div className={`flex items-center justify-between px-4 py-2.5 rounded-2xl border transition-all duration-300 shadow-xs ${statusBg}`}>
         <div className="flex items-center gap-2">
           {isAlert ? (
