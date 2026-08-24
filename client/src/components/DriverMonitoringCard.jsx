@@ -28,11 +28,14 @@ import {
   MOUTH
 } from "../utils/faceMeshDetector";
 
+import { useTrafficSafety } from "../context/TrafficSafetyContext";
+
 export default function DriverMonitoringCard({ 
   aiState, 
   setAiState, 
   onTriggerRestArea 
 }) {
+  const { demoMode } = useTrafficSafety();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -57,6 +60,72 @@ export default function DriverMonitoringCard({
   const [closureThresholdSec, setClosureThresholdSec] = useState(4.5); // Default 4.5 seconds
   const [earThreshold, setEarThreshold] = useState(0.23);
   const [marThreshold, setMarThreshold] = useState(0.60);
+
+  // Sync demoMode with aiState
+  useEffect(() => {
+    if (demoMode === "DROWSY") {
+      setCurrentClosureSec(3.8);
+      setAiState({
+        drowsinessScore: 78,
+        state: "DROWSY",
+        stateLabel: "Drowsy",
+        statusMessage: "⚠️ Drowsiness Warning (78% Fatigue). Eyes closing!",
+        alertLevel: 2,
+        indicators: {
+          eyes: "Closed",
+          yawning: "No",
+          headPose: "Down / Nodding"
+        },
+        metrics: {
+          avgEar: 0.12,
+          mar: 0.18,
+          closureDurationSec: 3.8,
+          totalBlinks: 14
+        }
+      });
+    } else if (demoMode === "CRITICAL") {
+      setCurrentClosureSec(4.8);
+      setAiState({
+        drowsinessScore: 94,
+        state: "CRITICAL",
+        stateLabel: "Critical",
+        statusMessage: "🚨 CRITICAL: Extreme Fatigue & Microsleep! Pull over immediately!",
+        alertLevel: 3,
+        indicators: {
+          eyes: "Closed",
+          yawning: "Yes",
+          headPose: "Down / Nodding"
+        },
+        metrics: {
+          avgEar: 0.08,
+          mar: 0.72,
+          closureDurationSec: 4.8,
+          totalBlinks: 19
+        }
+      });
+    } else if (demoMode === "NORMAL") {
+      setCurrentClosureSec(0);
+      setAiState({
+        drowsinessScore: 16,
+        state: "ALERT",
+        stateLabel: "Alert",
+        statusMessage: "You are Alert. Keep driving safely!",
+        alertLevel: 0,
+        indicators: {
+          eyes: "Open",
+          yawning: "No",
+          headPose: "Normal"
+        },
+        metrics: {
+          avgEar: 0.32,
+          mar: 0.14,
+          closureDurationSec: 0,
+          totalBlinks: 8
+        }
+      });
+    }
+  }, [demoMode, setAiState]);
+
 
   // Sync analyzer thresholds
   useEffect(() => {
@@ -373,23 +442,62 @@ export default function DriverMonitoringCard({
 
         {/* Fallback Overlay when Camera is Stopped */}
         {!cameraActive && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center bg-slate-900/90 backdrop-blur-md z-10">
-            <div className="w-14 h-14 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 mb-3 animate-pulse">
-              <Camera className="w-7 h-7" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-5 text-center bg-slate-900/90 backdrop-blur-md z-10">
+            <div className="w-12 h-12 rounded-2xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-blue-400 mb-2 animate-pulse">
+              <Camera className="w-6 h-6" />
             </div>
             <h3 className="text-sm font-bold text-white mb-1 font-poppins">Real-Time Face Drowsiness AI</h3>
-            <p className="text-xs text-slate-400 mb-4 max-w-xs leading-relaxed font-poppins">
+            <p className="text-xs text-slate-400 mb-3 max-w-xs leading-relaxed font-poppins">
               {cameraError || "Enable webcam for real-time computer vision tracking of eye blinks, fatigue, and yawning."}
             </p>
-            <button
-              onClick={startCamera}
-              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-extrabold shadow-lg shadow-blue-500/30 transition-all active:scale-95 cursor-pointer flex items-center gap-2"
-            >
-              <Zap className="w-4 h-4" />
-              <span>Allow & Start Camera</span>
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button
+                onClick={startCamera}
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-extrabold shadow-lg shadow-blue-500/30 transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Allow & Start Camera</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setCurrentClosureSec(3.8);
+                  setAiState({
+                    drowsinessScore: 78,
+                    state: "DROWSY",
+                    stateLabel: "Drowsy",
+                    statusMessage: "⚠️ Drowsiness Warning (78% Fatigue). Eyes closing!",
+                    alertLevel: 2,
+                    indicators: { eyes: "Closed", yawning: "No", headPose: "Down / Nodding" },
+                    metrics: { avgEar: 0.12, mar: 0.18, closureDurationSec: 3.8, totalBlinks: 14 }
+                  });
+                }}
+                className="px-3 py-2 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-400/40 text-amber-300 text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+              >
+                <span>😴 Test Drowsy (78%)</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setCurrentClosureSec(0);
+                  setAiState({
+                    drowsinessScore: 16,
+                    state: "ALERT",
+                    stateLabel: "Alert",
+                    statusMessage: "You are Alert. Keep driving safely!",
+                    alertLevel: 0,
+                    indicators: { eyes: "Open", yawning: "No", headPose: "Normal" },
+                    metrics: { avgEar: 0.32, mar: 0.14, closureDurationSec: 0, totalBlinks: 8 }
+                  });
+                }}
+                className="px-3 py-2 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/40 text-emerald-300 text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+              >
+                <span>🟢 Reset Alert</span>
+              </button>
+            </div>
           </div>
         )}
+
 
         {/* Top Badges Bar */}
         <div className="absolute top-3.5 right-3.5 z-20 flex items-center gap-2">
