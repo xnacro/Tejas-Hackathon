@@ -518,9 +518,9 @@ export default function LiveNavigationCard({ onEndTrip }) {
     : "NH 44 Highway Corridor";
 
   return (
-    <div className="flex flex-col gap-3.5 h-full relative">
+    <div className="flex flex-col gap-2.5 h-full min-h-0 relative font-poppins">
       {/* 1. Header with View Mode Switcher & AI Perception Overlay Toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1 shrink-0">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-lg bg-blue-100/80 flex items-center justify-center text-blue-600">
             <MapPin className="w-4 h-4 stroke-[2.5]" />
@@ -604,9 +604,9 @@ export default function LiveNavigationCard({ onEndTrip }) {
 
       {/* 2. Destination Search Box (Shown in Map Mode) */}
       {centerViewMode === "MAP" && (
-        <div className="relative z-30">
+        <div className="relative z-30 shrink-0">
           <div className="relative flex items-center">
-            <Search className="absolute left-3.5 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 w-3.5 h-3.5 text-slate-400" />
             <input
               type="text"
               placeholder="🔍 Search destination (e.g. IIT Guwahati, Patna Junction, AIIMS)..."
@@ -616,7 +616,7 @@ export default function LiveNavigationCard({ onEndTrip }) {
                 setIsSearchOpen(true);
               }}
               onFocus={() => setIsSearchOpen(true)}
-              className="w-full pl-10 pr-10 py-2 rounded-2xl bg-white/90 border border-slate-200/90 shadow-sm text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 backdrop-blur-md transition-all"
+              className="w-full pl-8.5 pr-8.5 py-1.5 rounded-xl bg-white/90 border border-slate-200/90 shadow-2xs text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/40 focus:border-blue-500 backdrop-blur-md transition-all"
             />
             {searchQuery ? (
               <button 
@@ -624,14 +624,14 @@ export default function LiveNavigationCard({ onEndTrip }) {
                   setSearchQuery("");
                   setIsSearchOpen(false);
                 }}
-                className="absolute right-3 p-1 rounded-full hover:bg-slate-100 text-slate-400 cursor-pointer"
+                className="absolute right-2.5 p-1 rounded-full hover:bg-slate-100 text-slate-400 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             ) : (
               <button
                 onClick={() => setIsSearchOpen(!isSearchOpen)}
-                className="absolute right-3 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                className="absolute right-2.5 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
               >
                 Places
               </button>
@@ -677,12 +677,13 @@ export default function LiveNavigationCard({ onEndTrip }) {
       {centerViewMode === "LIDAR_3D" ? (
         <Lidar3DViewer />
       ) : (
-        <div className="relative w-full flex-1 min-h-[280px] lg:min-h-[350px] rounded-3xl overflow-hidden glass-panel border border-white shadow-lg bg-[#f1f5f9]">
+        <div className="relative w-full flex-1 min-h-0 h-full rounded-2xl overflow-hidden glass-panel border border-white shadow-md bg-[#f1f5f9]">
           {/* Main Google Map View (handles 2D & 3D Perspective smoothly) */}
           <div 
             ref={map2DContainerRef} 
             className="absolute inset-0 w-full h-full z-10" 
           />
+
 
 
           {/* Optional Native Maps 3D Overlay Container */}
